@@ -13,11 +13,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -49,6 +45,10 @@ import com.zegocloud.uikit.prebuilt.call.ZegoUIKitPrebuiltCallService
 import com.zegocloud.uikit.plugin.invitation.ZegoInvitationType
 import com.zegocloud.uikit.service.defines.ZegoUIKitUser
 import android.app.Activity
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -68,6 +68,7 @@ import com.example.dating_app.model.Call
 import com.example.dating_app.repository.FirebaseRepository
 import com.example.dating_app.util.CloudinaryHelper
 import com.example.dating_app.util.MediaDownloader
+import com.example.dating_app.util.SecurityUtils
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -75,7 +76,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.UUID
+import javax.crypto.spec.SecretKeySpec
 
 class ChatActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,7 +104,7 @@ class ChatActivity : ComponentActivity() {
 
 enum class CallType { NONE, AUDIO, VIDEO }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
     var messageText by remember { mutableStateOf("") }
@@ -113,6 +114,28 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
     var receiverUser by remember { mutableStateOf<User?>(null) }
     var currentUserProfile by remember { mutableStateOf<User?>(null) }
     var incomingCall by remember { mutableStateOf<Call?>(null) }
+
+    // Security States
+    var isE2EEEnabled by remember { mutableStateOf(true) }
+    var selfDestructSeconds by remember { mutableIntStateOf(0) }
+    val chatKey = remember(currentUser, receiverId) {
+        if (currentUser != null && receiverId.isNotEmpty()) {
+            SecurityUtils.generateChatKey(currentUser.uid, receiverId)
+        } else null
+    }
+
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                if (uri?.toString()?.contains("screenshots") == true) {
+                    Toast.makeText(context, "Screenshot detected!", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        context.contentResolver.registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer)
+        onDispose { context.contentResolver.unregisterContentObserver(observer) }
+    }
 
     LaunchedEffect(receiverId) {
         if (receiverId.isNotEmpty()) {
@@ -147,18 +170,13 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
 
-    val context = LocalContext.current
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var audioFile by remember { mutableStateOf<File?>(null) }
     var recordingStartTime by remember { mutableLongStateOf(0L) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            // Permission granted
-        }
-    }
+    ) { isGranted -> }
 
     if (showReportDialog) {
         var selectedReason by remember { mutableStateOf("") }
@@ -191,7 +209,7 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                                 repository.reportUser(currentUser.uid, receiverId, selectedReason)
                                 showReportDialog = false
                                 Toast.makeText(context, "User reported successfully", Toast.LENGTH_SHORT).show()
-                                onBack() // Close chat after reporting
+                                onBack()
                             }
                         }
                     },
@@ -280,7 +298,6 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
         }
     }
 
-    // Media Player State
     var activeVideoUri by remember { mutableStateOf<Uri?>(null) }
     var activeImageUri by remember { mutableStateOf<Uri?>(null) }
     val audioPlayer = remember { ExoPlayer.Builder(context).build() }
@@ -334,21 +351,10 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                         else -> "image"
                     }
                     
-                    if (it.authority == null) {
-                        Toast.makeText(context, "Invalid media source", Toast.LENGTH_SHORT).show()
-                        return@launch
-                    }
-
                     Toast.makeText(context, "Uploading ${uploadType}...", Toast.LENGTH_SHORT).show()
                     
                     val result = CloudinaryHelper.uploadMedia(it, uploadType)
                     if (result != null) {
-                        val messageDesc = when (type) {
-                            MessageType.VIDEO -> "Video"
-                            MessageType.AUDIO -> "Voice Note"
-                            else -> "Image"
-                        }
-                        
                         val duration = if (type == MessageType.AUDIO) {
                             getAudioDuration(context, it)
                         } else null
@@ -356,7 +362,7 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                         repository.sendMessage(Message(
                             senderId = currentUser.uid,
                             receiverId = receiverId,
-                            messageText = messageDesc,
+                            messageText = uploadType.replaceFirstChar { it.uppercase() },
                             messageType = type,
                             mediaUrl = result.url,
                             mediaPublicId = result.publicId,
@@ -406,72 +412,54 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                         }
                     },
                     actions = {
-                        IconButton(onClick = {
-                            val invitees = Collections.singletonList(com.zegocloud.uikit.service.defines.ZegoUIKitUser(receiverId, chatName))
-                            com.zegocloud.uikit.prebuilt.call.ZegoUIKitPrebuiltCallService.sendInvitationWithUIChange(
-                                context as android.app.Activity,
-                                invitees,
-                                com.zegocloud.uikit.plugin.invitation.ZegoInvitationType.VOICE_CALL,
-                                null
+                        IconButton(onClick = { isE2EEEnabled = !isE2EEEnabled }) {
+                            Icon(
+                                imageVector = if (isE2EEEnabled) Icons.Default.Https else Icons.Default.LockOpen,
+                                contentDescription = "E2EE",
+                                tint = if (isE2EEEnabled) Color(0xFF4CAF50) else Color.Gray
                             )
+                        }
+                        IconButton(onClick = {
+                            selfDestructSeconds = when(selfDestructSeconds) {
+                                0 -> 10
+                                10 -> 60
+                                60 -> 3600
+                                else -> 0
+                            }
+                            val msg = if (selfDestructSeconds > 0) "Self-destruct: $selfDestructSeconds sec" else "Self-destruct off"
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         }) {
                             Icon(
-                                painter = painterResource(id = R.drawable.ic_call_pink),
-                                contentDescription = "Voice Call",
-                                tint = Color.Unspecified,
-                                modifier = Modifier.size(24.dp)
+                                imageVector = Icons.Default.Timer,
+                                contentDescription = "Self Destruct",
+                                tint = if (selfDestructSeconds > 0) Color(0xFFFF9800) else Color.Gray
                             )
                         }
                         IconButton(onClick = {
                             val invitees = Collections.singletonList(com.zegocloud.uikit.service.defines.ZegoUIKitUser(receiverId, chatName))
                             com.zegocloud.uikit.prebuilt.call.ZegoUIKitPrebuiltCallService.sendInvitationWithUIChange(
-                                context as android.app.Activity,
-                                invitees,
-                                com.zegocloud.uikit.plugin.invitation.ZegoInvitationType.VIDEO_CALL,
-                                null
+                                context as Activity, invitees, ZegoInvitationType.VOICE_CALL, null
                             )
                         }) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_video_pink),
-                                contentDescription = "Video Call",
-                                tint = Color.Unspecified,
-                                modifier = Modifier.size(24.dp)
+                            Icon(painter = painterResource(id = R.drawable.ic_call_pink), contentDescription = "Voice Call", modifier = Modifier.size(24.dp))
+                        }
+                        IconButton(onClick = {
+                            val invitees = Collections.singletonList(com.zegocloud.uikit.service.defines.ZegoUIKitUser(receiverId, chatName))
+                            com.zegocloud.uikit.prebuilt.call.ZegoUIKitPrebuiltCallService.sendInvitationWithUIChange(
+                                context as Activity, invitees, ZegoInvitationType.VIDEO_CALL, null
                             )
+                        }) {
+                            Icon(painter = painterResource(id = R.drawable.ic_video_pink), contentDescription = "Video Call", modifier = Modifier.size(24.dp))
                         }
                         Box {
-                            IconButton(onClick = { showMenu = true }) { 
-                                Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.Black) 
-                            }
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("View Profile") },
-                                    onClick = { showMenu = false },
-                                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Report User") },
-                                    onClick = { 
-                                        showMenu = false 
-                                        showReportDialog = true
-                                    },
-                                    leadingIcon = { Icon(Icons.Default.Report, contentDescription = null) }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Block User", color = Color.Red) },
-                                    onClick = { 
-                                        showMenu = false 
-                                        if (currentUser != null && receiverId.isNotEmpty()) {
-                                            scope.launch {
-                                                repository.blockUser(currentUser.uid, receiverId)
-                                                onBack() // Close chat after blocking
-                                            }
-                                        }
-                                    },
-                                    leadingIcon = { Icon(Icons.Default.Block, contentDescription = null, tint = Color.Red) }
-                                )
+                            IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "More") }
+                            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                DropdownMenuItem(text = { Text("View Profile") }, onClick = { showMenu = false })
+                                DropdownMenuItem(text = { Text("Report User") }, onClick = { showMenu = false; showReportDialog = true })
+                                DropdownMenuItem(text = { Text("Block User", color = Color.Red) }, onClick = { 
+                                    showMenu = false 
+                                    scope.launch { currentUser?.let { repository.blockUser(it.uid, receiverId) }; onBack() }
+                                })
                             }
                         }
                     },
@@ -486,18 +474,27 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                     onAttachClick = { mediaPickerLauncher.launch("*/*") },
                     onSendClick = {
                         if (messageText.isNotBlank()) {
-                            val textToSend = messageText // Capture the text before clearing state
-                            if (currentUser != null && receiverId.isNotEmpty()) {
-                                scope.launch {
+                            if (SecurityUtils.isSpam(messageText)) {
+                                Toast.makeText(context, "Spam detected!", Toast.LENGTH_SHORT).show()
+                                return@ChatBottomBar
+                            }
+                            val textToSend = if (isE2EEEnabled && chatKey != null) {
+                                SecurityUtils.encrypt(messageText, chatKey)
+                            } else messageText
+
+                            scope.launch {
+                                currentUser?.let {
                                     repository.sendMessage(Message(
-                                        senderId = currentUser.uid,
+                                        senderId = it.uid,
                                         receiverId = receiverId,
                                         messageText = textToSend,
+                                        isEncrypted = isE2EEEnabled,
+                                        selfDestructAt = if (selfDestructSeconds > 0) System.currentTimeMillis() + (selfDestructSeconds * 1000) else null,
                                         timestamp = System.currentTimeMillis()
                                     ))
                                 }
-                                messageText = ""
                             }
+                            messageText = ""
                         }
                     },
                     onMicClick = { startRecording() },
@@ -521,281 +518,35 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                         isPlaying = currentlyPlayingAudioId == message.id,
                         playbackProgress = if (currentlyPlayingAudioId == message.id && audioTotalDuration > 0) playbackPosition.toFloat() / audioTotalDuration else 0f,
                         currentPositionText = if (currentlyPlayingAudioId == message.id) formatDuration(playbackPosition) else (message.duration ?: "0:00"),
+                        chatKey = chatKey,
                         onMediaClick = {
-                            if (message.messageType == MessageType.VIDEO) {
-                                activeVideoUri = Uri.parse(message.mediaUrl)
-                            } else if (message.messageType == MessageType.IMAGE) {
-                                activeImageUri = Uri.parse(message.mediaUrl)
-                            } else if (message.messageType == MessageType.AUDIO) {
-                                if (currentlyPlayingAudioId == message.id) {
-                                    if (audioPlayer.isPlaying) audioPlayer.pause() else audioPlayer.play()
-                                } else {
+                            if (message.messageType == MessageType.VIDEO) activeVideoUri = Uri.parse(message.mediaUrl)
+                            else if (message.messageType == MessageType.IMAGE) activeImageUri = Uri.parse(message.mediaUrl)
+                            else if (message.messageType == MessageType.AUDIO) {
+                                if (currentlyPlayingAudioId == message.id) { if (audioPlayer.isPlaying) audioPlayer.pause() else audioPlayer.play() }
+                                else {
                                     currentlyPlayingAudioId = message.id
-                                    audioPlayer.stop()
-                                    playbackPosition = 0L
-                                    audioTotalDuration = 0L
-                                    audioPlayer.setMediaItem(MediaItem.fromUri(message.mediaUrl ?: ""))
-                                    audioPlayer.prepare()
-                                    audioPlayer.play()
+                                    audioPlayer.stop(); audioPlayer.setMediaItem(MediaItem.fromUri(message.mediaUrl ?: "")); audioPlayer.prepare(); audioPlayer.play()
                                 }
+                            }
+                        },
+                        onLongClick = {
+                            if (message.senderId == currentUser?.uid) {
+                                scope.launch { repository.deleteMessage(message.id) }
                             }
                         }
                     )
                 }
             }
-            
-            LaunchedEffect(messages.size) {
-                if (messages.isNotEmpty()) {
-                    listState.animateScrollToItem(messages.size - 1)
-                }
-            }
+            LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
         }
 
-        if (activeVideoUri != null) {
-            VideoPlayerDialog(uri = activeVideoUri!!) { activeVideoUri = null }
-        }
-
-        if (activeImageUri != null) {
-            ImagePreviewDialog(uri = activeImageUri!!) { activeImageUri = null }
-        }
-
-        /* ZEGOCLOUD handles incoming calls automatically via its invitation service. 
-           The logic below is removed to avoid conflict. */
-
-        AnimatedVisibility(visible = activeCall != CallType.NONE, enter = slideInVertically { it }, exit = slideOutVertically { it }) {
-            val callName = if (receiverUser != null) "${receiverUser?.first_name} ${receiverUser?.last_name}" else chatName
-            val callProfileImage = receiverUser?.profile_image
-            
-            if (activeCall == CallType.VIDEO) {
-                VideoCallScreen(
-                    name = callName,
-                    profileImage = callProfileImage,
-                    onEnd = { 
-                        scope.launch {
-                            currentCallId?.let { repository.updateCallStatus(it, "ended") }
-                            activeCall = CallType.NONE 
-                            currentCallId = null
-                        }
-                    }
-                )
-            } else if (activeCall == CallType.AUDIO) {
-                AudioCallScreen(
-                    name = callName,
-                    profileImage = callProfileImage,
-                    onEnd = { 
-                        scope.launch {
-                            currentCallId?.let { repository.updateCallStatus(it, "ended") }
-                            activeCall = CallType.NONE 
-                            currentCallId = null
-                        }
-                    }
-                )
-            }
-        }
+        if (activeVideoUri != null) VideoPlayerDialog(uri = activeVideoUri!!) { activeVideoUri = null }
+        if (activeImageUri != null) ImagePreviewDialog(uri = activeImageUri!!) { activeImageUri = null }
     }
 }
 
-@Composable
-fun VideoCallScreen(name: String, profileImage: String?, onEnd: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        AsyncImage(
-            model = if (profileImage?.isNotEmpty() == true) profileImage else R.drawable.girl,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            placeholder = painterResource(id = R.drawable.girl)
-        )
-        Surface(
-            modifier = Modifier.padding(24.dp).size(width = 100.dp, height = 150.dp).align(Alignment.TopEnd),
-            shape = RoundedCornerShape(12.dp),
-            color = Color.DarkGray
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text("You", color = Color.White, fontSize = 12.sp)
-            }
-        }
-        Column(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 48.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(name, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text("00:24", color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
-            Spacer(modifier = Modifier.height(40.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CallActionIcon(Icons.Default.Videocam, "Camera", Color.White.copy(alpha = 0.2f))
-                CallActionIcon(Icons.Default.Mic, "Mute", Color.White.copy(alpha = 0.2f))
-                CallActionIcon(Icons.Default.FlipCameraAndroid, "Flip", Color.White.copy(alpha = 0.2f))
-                FloatingActionButton(onClick = onEnd, containerColor = Color.Red, contentColor = Color.White, shape = CircleShape) {
-                    Icon(Icons.Default.CallEnd, contentDescription = "End")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AudioCallScreen(name: String, profileImage: String?, onEnd: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Color(0xFF2D0A31), Color(0xFF1A051D)))
-        ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.size(200.dp).clip(CircleShape).background(Color(0xFFFC2C5A).copy(alpha = 0.1f)))
-                AsyncImage(
-                    model = if (profileImage?.isNotEmpty() == true) profileImage else R.drawable.girl,
-                    contentDescription = null,
-                    modifier = Modifier.size(140.dp).clip(CircleShape).border(2.dp, Color(0xFFFC2C5A), CircleShape),
-                    contentScale = ContentScale.Crop,
-                    placeholder = painterResource(id = R.drawable.girl)
-                )
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(name, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Text("Calling...", color = Color(0xFFFC2C5A), fontSize = 16.sp)
-        }
-        Row(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 80.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            CallActionIcon(Icons.Default.MicOff, "Mute", Color.White.copy(alpha = 0.1f))
-            FloatingActionButton(onClick = onEnd, containerColor = Color.Red, contentColor = Color.White, shape = CircleShape, modifier = Modifier.size(64.dp)) {
-                Icon(Icons.Default.CallEnd, contentDescription = "End", modifier = Modifier.size(32.dp))
-            }
-            CallActionIcon(Icons.AutoMirrored.Filled.VolumeUp, "Speaker", Color.White.copy(alpha = 0.1f))
-        }
-    }
-}
-
-@Composable
-fun CallActionIcon(icon: ImageVector, label: String, bgColor: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(bgColor).clickable { }, contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp))
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(label, color = Color.White, fontSize = 12.sp)
-    }
-}
-
-@Composable
-fun ImagePreviewDialog(uri: Uri, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            AsyncImage(
-                model = uri,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-            
-            Row(
-                modifier = Modifier.padding(16.dp).align(Alignment.TopEnd),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = {
-                    val fileName = "IMG_${System.currentTimeMillis()}.jpg"
-                    MediaDownloader.downloadMedia(context, uri.toString(), fileName)
-                }) {
-                    Icon(Icons.Default.Download, contentDescription = "Download", tint = Color.White)
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun VideoPlayerDialog(uri: Uri, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        val exoPlayer = remember {
-            ExoPlayer.Builder(context).build().apply {
-                setMediaItem(MediaItem.fromUri(uri))
-                prepare()
-                playWhenReady = true
-            }
-        }
-        DisposableEffect(exoPlayer) { onDispose { exoPlayer.release() } }
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            AndroidView(factory = { PlayerView(context).apply { player = exoPlayer } }, modifier = Modifier.fillMaxSize())
-            
-            Row(
-                modifier = Modifier.padding(16.dp).align(Alignment.TopEnd),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = {
-                    val fileName = "VID_${System.currentTimeMillis()}.mp4"
-                    MediaDownloader.downloadMedia(context, uri.toString(), fileName)
-                }) {
-                    Icon(Icons.Default.Download, contentDescription = "Download", tint = Color.White)
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ChatBottomBar(messageText: String, isRecording: Boolean, onValueChange: (String) -> Unit, onAttachClick: () -> Unit, onSendClick: () -> Unit, onMicClick: () -> Unit, onSendVoice: () -> Unit, onCancelVoice: () -> Unit) {
-    Surface(modifier = Modifier.fillMaxWidth(), color = Color.White, shadowElevation = 8.dp) {
-        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp).navigationBarsPadding().imePadding().fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            AnimatedVisibility(visible = !isRecording) {
-                IconButton(onClick = onAttachClick) { Icon(Icons.Default.Add, contentDescription = "Attach", tint = Color.Gray) }
-            }
-            Box(modifier = Modifier.weight(1f)) {
-                if (isRecording) {
-                    RecordingUI(onCancel = onCancelVoice)
-                } else {
-                    TextField(
-                        value = messageText, onValueChange = onValueChange, modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Type a message...", fontSize = 14.sp) },
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color(0xFFF0F0F0), unfocusedContainerColor = Color(0xFFF0F0F0),
-                            disabledContainerColor = Color(0xFFF0F0F0), focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                        ),
-                        shape = RoundedCornerShape(24.dp), textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                        leadingIcon = { IconButton(onClick = { }) { Icon(Icons.Default.SentimentSatisfiedAlt, contentDescription = "Emoji", tint = Color.Gray) } }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            IconButton(
-                onClick = if (isRecording) onSendVoice else if (messageText.isNotBlank()) onSendClick else onMicClick,
-                modifier = Modifier.size(42.dp).background(Color(0xFFFC2C5A), CircleShape)
-            ) {
-                Icon(imageVector = if (isRecording || messageText.isNotBlank()) Icons.AutoMirrored.Filled.Send else Icons.Default.Mic, contentDescription = "Action", tint = Color.White, modifier = Modifier.size(20.dp))
-            }
-        }
-    }
-}
-
-@Composable
-fun RecordingUI(onCancel: () -> Unit) {
-    var seconds by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        while(true) { delay(1000); seconds++ }
-    }
-    Row(modifier = Modifier.fillMaxWidth().height(50.dp).background(Color(0xFFF0F0F0), RoundedCornerShape(24.dp)).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFFFC2C5A), modifier = Modifier.size(20.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = String.format(Locale.US, "%02d:%02d", seconds / 60, seconds % 60), fontSize = 14.sp, color = Color.Black, modifier = Modifier.weight(1f))
-        TextButton(onClick = onCancel) { Text("Cancel", color = Color.Gray) }
-    }
-}
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatBubble(
     message: Message,
@@ -805,7 +556,9 @@ fun ChatBubble(
     isPlaying: Boolean,
     playbackProgress: Float,
     currentPositionText: String,
-    onMediaClick: () -> Unit
+    chatKey: SecretKeySpec?,
+    onMediaClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val isMe = message.senderId == currentUserId
     val bubbleColor = if (isMe) Color(0xFFFC2C5A) else Color.White
@@ -815,46 +568,44 @@ fun ChatBubble(
     val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(message.timestamp))
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = alignment) {
+        if (message.selfDestructAt != null && !message.isDeletedForEveryone) {
+            val currentTime = System.currentTimeMillis()
+            val timeLeft = (message.selfDestructAt - currentTime) / 1000
+            
+            if (timeLeft <= 0) {
+                // Trigger deletion
+                LaunchedEffect(message.id) {
+                    onLongClick() // This was mapped to delete in the caller
+                }
+            } else {
+                Text(text = "Expires in ${timeLeft}s", fontSize = 10.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp))
+            }
+        }
+
         Surface(
-            color = bubbleColor,
+            color = if (message.isDeletedForEveryone) Color.LightGray.copy(alpha = 0.2f) else bubbleColor,
             shape = shape,
             tonalElevation = 1.dp,
-            modifier = Modifier.widthIn(max = if (message.messageType == MessageType.TEXT) 300.dp else 260.dp)
+            modifier = Modifier
+                .widthIn(max = if (message.messageType == MessageType.TEXT) 300.dp else 260.dp)
+                .combinedClickable(onClick = onMediaClick, onLongClick = onLongClick)
         ) {
-            when (message.messageType) {
-                MessageType.TEXT -> {
-                    Text(
-                        text = message.messageText,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        color = textColor,
-                        fontSize = 14.sp
-                    )
-                }
-                MessageType.AUDIO -> {
-                    val senderProfileImage = if (isMe) currentUserProfile?.profile_image else receiverUser?.profile_image
-                    Box(modifier = Modifier.width(260.dp)) {
-                        AudioMessageItem(
-                            senderProfileImage = senderProfileImage,
-                            isMe = isMe,
-                            isPlaying = isPlaying,
-                            playbackProgress = playbackProgress,
-                            currentPositionText = currentPositionText,
-                            seed = message.id.hashCode(),
-                            onPlayClick = onMediaClick
-                        )
+            if (message.isDeletedForEveryone) {
+                Text(text = "This message was deleted", modifier = Modifier.padding(12.dp), color = Color.Gray, fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+            } else {
+                when (message.messageType) {
+                    MessageType.TEXT -> {
+                        val displayContent = if (message.isEncrypted && chatKey != null) {
+                            SecurityUtils.decrypt(message.messageText, chatKey)
+                        } else message.messageText
+                        Text(text = displayContent, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = textColor, fontSize = 14.sp)
                     }
-                }
-                MessageType.VIDEO -> {
-                    VideoMessageItem(
-                        message = message,
-                        onClick = onMediaClick
-                    )
-                }
-                MessageType.IMAGE -> {
-                    ImageMessageItem(
-                        message = message,
-                        onClick = onMediaClick
-                    )
+                    MessageType.AUDIO -> {
+                        val senderProfileImage = if (isMe) currentUserProfile?.profile_image else receiverUser?.profile_image
+                        AudioMessageItem(senderProfileImage, isMe, isPlaying, playbackProgress, currentPositionText, message.id.hashCode(), onMediaClick)
+                    }
+                    MessageType.VIDEO -> VideoMessageItem(message, onMediaClick)
+                    MessageType.IMAGE -> ImageMessageItem(message, onMediaClick)
                 }
             }
         }
@@ -869,89 +620,27 @@ fun ChatBubble(
 }
 
 @Composable
-fun AudioMessageItem(
-    senderProfileImage: String?,
-    isMe: Boolean,
-    isPlaying: Boolean,
-    playbackProgress: Float,
-    currentPositionText: String,
-    seed: Int,
-    onPlayClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier.padding(8.dp).fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Profile Image with Mic Icon
+fun AudioMessageItem(senderProfileImage: String?, isMe: Boolean, isPlaying: Boolean, playbackProgress: Float, currentPositionText: String, seed: Int, onPlayClick: () -> Unit) {
+    Row(modifier = Modifier.padding(8.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(contentAlignment = Alignment.BottomEnd) {
-                AsyncImage(
-                    model = if (senderProfileImage?.isNotEmpty() == true) senderProfileImage else R.drawable.girl,
-                    contentDescription = null,
-                    modifier = Modifier.size(42.dp).clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                    placeholder = painterResource(id = R.drawable.girl)
-                )
-                Box(
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clip(CircleShape)
-                        .background(Color.White)
-                        .padding(2.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = null,
-                        tint = if (isMe) Color(0xFFFC2C5A) else Color.Gray,
-                        modifier = Modifier.size(10.dp)
-                    )
+                AsyncImage(model = if (senderProfileImage?.isNotEmpty() == true) senderProfileImage else R.drawable.girl, contentDescription = null, modifier = Modifier.size(42.dp).clip(CircleShape), contentScale = ContentScale.Crop, placeholder = painterResource(id = R.drawable.girl))
+                Box(modifier = Modifier.size(16.dp).clip(CircleShape).background(Color.White).padding(2.dp), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Mic, contentDescription = null, tint = if (isMe) Color(0xFFFC2C5A) else Color.Gray, modifier = Modifier.size(10.dp))
                 }
             }
         }
-
         Spacer(modifier = Modifier.width(8.dp))
-
-        // Play Button and Progress
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = onPlayClick,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = if (isMe) Color.White else Color(0xFFFC2C5A),
-                        modifier = Modifier.size(28.dp)
-                    )
+                IconButton(onClick = onPlayClick, modifier = Modifier.size(32.dp)) {
+                    Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = if (isMe) Color.White else Color(0xFFFC2C5A), modifier = Modifier.size(28.dp))
                 }
-
                 Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.weight(1f).height(24.dp)) {
-                    AudioWaveform(
-                        progress = playbackProgress,
-                        color = if (isMe) Color.White else Color(0xFFFC2C5A),
-                        seed = seed
-                    )
-                    // Thumb dot
-                    if (playbackProgress > 0) {
-                        Canvas(modifier = Modifier.fillMaxWidth().height(24.dp)) {
-                            val x = size.width * playbackProgress
-                            drawCircle(
-                                color = if (isMe) Color.White else Color(0xFF2196F3),
-                                radius = 4.dp.toPx(),
-                                center = center.copy(x = x)
-                            )
-                        }
-                    }
+                    AudioWaveform(playbackProgress, if (isMe) Color.White else Color(0xFFFC2C5A), seed)
                 }
             }
-            Text(
-                text = currentPositionText,
-                fontSize = 11.sp,
-                color = if (isMe) Color.White.copy(alpha = 0.8f) else Color.Gray,
-                modifier = Modifier.padding(start = 36.dp)
-            )
+            Text(text = currentPositionText, fontSize = 11.sp, color = if (isMe) Color.White.copy(alpha = 0.8f) else Color.Gray, modifier = Modifier.padding(start = 36.dp))
         }
     }
 }
@@ -959,70 +648,25 @@ fun AudioMessageItem(
 @Composable
 fun AudioWaveform(progress: Float, color: Color, seed: Int = 0) {
     val barCount = 35
-    val heights = remember(seed) {
-        List(barCount) { (6..18).random().dp }
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth().height(24.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    val heights = remember(seed) { List(barCount) { (6..18).random().dp } }
+    Row(modifier = Modifier.fillMaxWidth().height(24.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
         repeat(barCount) { index ->
             val isPlayed = (index.toFloat() / barCount) <= progress
-            Box(
-                modifier = Modifier
-                    .width(2.dp)
-                    .height(heights[index])
-                    .clip(CircleShape)
-                    .background(if (isPlayed) color else color.copy(alpha = 0.3f))
-            )
+            Box(modifier = Modifier.width(2.dp).height(heights[index]).clip(CircleShape).background(if (isPlayed) color else color.copy(alpha = 0.3f)))
         }
     }
 }
 
 @Composable
 fun ImageMessageItem(message: Message, onClick: () -> Unit) {
-    val displayUrl = message.mediaPublicId?.let { CloudinaryHelper.getOptimizedUrl(it) } ?: message.mediaUrl
-    AsyncImage(
-        model = displayUrl,
-        contentDescription = "Image Message",
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 240.dp)
-            .clickable { onClick() },
-        contentScale = ContentScale.Crop
-    )
+    AsyncImage(model = message.mediaUrl, contentDescription = "Image", modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).clickable { onClick() }, contentScale = ContentScale.Crop)
 }
 
 @Composable
 fun VideoMessageItem(message: Message, onClick: () -> Unit) {
-    val thumbnailUrl = message.mediaPublicId?.let { CloudinaryHelper.getVideoThumbnailUrl(it) } ?: message.mediaUrl
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(180.dp)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        val context = LocalContext.current
-        AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(thumbnailUrl)
-                .decoderFactory(VideoFrameDecoder.Factory())
-                .crossfade(true)
-                .build(),
-            contentDescription = "Video Thumbnail",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            placeholder = painterResource(id = R.drawable.ic_launcher_background)
-        )
-        
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .background(Color.Black.copy(alpha = 0.5f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
+    Box(modifier = Modifier.fillMaxWidth().height(180.dp).clickable { onClick() }, contentAlignment = Alignment.Center) {
+        AsyncImage(model = message.mediaUrl, contentDescription = "Video", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        Box(modifier = Modifier.size(48.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape), contentAlignment = Alignment.Center) {
             Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(32.dp))
         }
     }
@@ -1030,75 +674,76 @@ fun VideoMessageItem(message: Message, onClick: () -> Unit) {
 
 fun formatDuration(ms: Long): String {
     val seconds = (ms / 1000).toInt()
-    val mins = seconds / 60
-    val secs = seconds % 60
-    return String.format(Locale.US, "%d:%02d", mins, secs)
-}
-
-@Composable
-private fun IncomingCallDialog(call: Call, onAccept: () -> Unit, onReject: () -> Unit) {
-    Dialog(onDismissRequest = { }) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = Color.White,
-            modifier = Modifier.fillMaxWidth().padding(16.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Incoming ${call.type.replaceFirstChar { it.uppercase() }} Call",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.Gray
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                AsyncImage(
-                    model = if (call.callerImage.isNotEmpty()) call.callerImage else R.drawable.girl,
-                    contentDescription = null,
-                    modifier = Modifier.size(100.dp).clip(CircleShape).border(2.dp, Color(0xFFFF1493), CircleShape),
-                    contentScale = ContentScale.Crop,
-                    placeholder = painterResource(id = R.drawable.girl)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(text = call.callerName, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(32.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    FloatingActionButton(
-                        onClick = onReject,
-                        containerColor = Color.Red,
-                        contentColor = Color.White,
-                        shape = CircleShape
-                    ) {
-                        Icon(Icons.Default.CallEnd, contentDescription = "Reject")
-                    }
-                    FloatingActionButton(
-                        onClick = onAccept,
-                        containerColor = Color.Green,
-                        contentColor = Color.White,
-                        shape = CircleShape
-                    ) {
-                        Icon(if (call.type == "video") Icons.Default.VideoCall else Icons.Default.Call, contentDescription = "Accept")
-                    }
-                }
-            }
-        }
-    }
+    return String.format(Locale.US, "%d:%02d", seconds / 60, seconds % 60)
 }
 
 fun getAudioDuration(context: android.content.Context, uri: Uri): String {
     val retriever = android.media.MediaMetadataRetriever()
     return try {
         retriever.setDataSource(context, uri)
-        val durationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
-        val durationMs = durationStr?.toLong() ?: 0L
+        val durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
         formatDuration(durationMs)
-    } catch (e: Exception) {
-        "0:00"
-    } finally {
-        retriever.release()
+    } catch (e: Exception) { "0:00" } finally { retriever.release() }
+}
+
+@Composable
+fun ChatBottomBar(messageText: String, isRecording: Boolean, onValueChange: (String) -> Unit, onAttachClick: () -> Unit, onSendClick: () -> Unit, onMicClick: () -> Unit, onSendVoice: () -> Unit, onCancelVoice: () -> Unit) {
+    Surface(modifier = Modifier.fillMaxWidth(), color = Color.White, shadowElevation = 8.dp) {
+        Row(modifier = Modifier.padding(8.dp).navigationBarsPadding().imePadding().fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (!isRecording) IconButton(onClick = onAttachClick) { Icon(Icons.Default.Add, contentDescription = "Attach", tint = Color.Gray) }
+            Box(modifier = Modifier.weight(1f)) {
+                if (isRecording) RecordingUI(onCancel = onCancelVoice)
+                else {
+                    TextField(
+                        value = messageText, onValueChange = onValueChange, modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Type a message...", fontSize = 14.sp) },
+                        colors = TextFieldDefaults.colors(focusedContainerColor = Color(0xFFF0F0F0), unfocusedContainerColor = Color(0xFFF0F0F0), focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+                        shape = RoundedCornerShape(24.dp), textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                        leadingIcon = { Icon(Icons.Default.SentimentSatisfiedAlt, contentDescription = "Emoji", tint = Color.Gray) }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(onClick = if (isRecording) onSendVoice else if (messageText.isNotBlank()) onSendClick else onMicClick, modifier = Modifier.size(42.dp).background(Color(0xFFFC2C5A), CircleShape)) {
+                Icon(imageVector = if (isRecording || messageText.isNotBlank()) Icons.AutoMirrored.Filled.Send else Icons.Default.Mic, contentDescription = "Action", tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+
+
+@Composable
+fun RecordingUI(onCancel: () -> Unit) {
+    var seconds by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while(true) { delay(1000); seconds++ } }
+    Row(modifier = Modifier.fillMaxWidth().height(50.dp).background(Color(0xFFF0F0F0), RoundedCornerShape(24.dp)).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFFFC2C5A), modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = String.format(Locale.US, "%02d:%02d", seconds / 60, seconds % 60), fontSize = 14.sp, color = Color.Black, modifier = Modifier.weight(1f))
+        TextButton(onClick = onCancel) { Text("Cancel", color = Color.Gray) }
+    }
+}
+
+@Composable
+private fun VideoPlayerDialog(uri: Uri, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val exoPlayer = remember { ExoPlayer.Builder(context).build().apply { setMediaItem(MediaItem.fromUri(uri)); prepare(); playWhenReady = true } }
+        DisposableEffect(exoPlayer) { onDispose { exoPlayer.release() } }
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            AndroidView(factory = { PlayerView(context).apply { player = exoPlayer } }, modifier = Modifier.fillMaxSize())
+            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) { Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White) }
+        }
+    }
+}
+
+@Composable
+private fun ImagePreviewDialog(uri: Uri, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            AsyncImage(model = uri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) { Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White) }
+        }
     }
 }

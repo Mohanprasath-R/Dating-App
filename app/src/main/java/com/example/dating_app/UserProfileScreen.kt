@@ -353,6 +353,15 @@ fun ProfileDetailsView(user: User, onBack: () -> Unit) {
             DetailItem(label = "Last Seen", value = user.last_seen.toString())
             DetailItem(label = "Account Status", value = user.account_status, statusColor = Color(0xFF4CAF50))
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        DetailSection(title = "Security", icon = Icons.Default.Security) {
+            DetailItem(label = "2FA (MFA)", value = "Enabled (Standard)")
+            DetailItem(label = "E2EE", value = "Enabled")
+            DetailItem(label = "Login History", value = "View History")
+            DetailItem(label = "Device Manager", value = "Managed")
+        }
     }
 }
 

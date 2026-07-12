@@ -7,7 +7,10 @@ import android.net.Uri
 import com.example.dating_app.util.CloudinaryHelper
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
+import com.example.dating_app.model.LoginRecord
+import com.example.dating_app.model.UserDevice
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import kotlinx.coroutines.channels.awaitClose
@@ -35,6 +38,47 @@ class FirebaseRepository {
         return try {
             val result = auth.signInWithEmailAndPassword(email, password).await()
             Result.success(result.user?.uid ?: "")
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun logLogin(userId: String, device: UserDevice): Result<Boolean> {
+        return try {
+            // 1. Check if device is new
+            val deviceDoc = usersCollection.document(userId).collection("devices").document(device.deviceId).get().await()
+            val isNewDevice = !deviceDoc.exists()
+
+            // 2. Save device info
+            usersCollection.document(userId).collection("devices").document(device.deviceId)
+                .set(device, SetOptions.merge()).await()
+
+            // 3. Log history
+            val recordRef = firestore.collection("login_history").document()
+            val record = LoginRecord(
+                id = recordRef.id,
+                userId = userId,
+                deviceName = device.deviceName,
+                deviceId = device.deviceId,
+                osVersion = android.os.Build.VERSION.RELEASE
+            )
+            recordRef.set(record).await()
+            
+            Result.success(isNewDevice)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getLoginHistory(userId: String): Result<List<LoginRecord>> {
+        return try {
+            val snapshot = firestore.collection("login_history")
+                .whereEqualTo("userId", userId)
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(20)
+                .get()
+                .await()
+            Result.success(snapshot.toObjects(LoginRecord::class.java))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -315,6 +359,24 @@ class FirebaseRepository {
             val docRef = messagesCollection.document()
             val messageWithId = message.copy(id = docRef.id)
             docRef.set(messageWithId).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteMessage(messageId: String): Result<Unit> {
+        return try {
+            messagesCollection.document(messageId).update("isDeletedForEveryone", true).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateMessage(messageId: String, data: Map<String, Any>): Result<Unit> {
+        return try {
+            messagesCollection.document(messageId).update(data).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

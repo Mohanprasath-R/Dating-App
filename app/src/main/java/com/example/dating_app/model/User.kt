@@ -10,7 +10,6 @@ data class User(
     val last_name: String = "",
     val email: String = "",
     val phone: String = "",
-    val password: String = "", // Note: Storing plain passwords in DB is not recommended.
     val profile_image: String = "",
     val cover_image: String = "",
     val bio: String = "",

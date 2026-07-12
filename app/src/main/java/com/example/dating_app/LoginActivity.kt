@@ -11,6 +11,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.datingapp.R
 import com.example.dating_app.repository.FirebaseRepository
+import android.provider.Settings
+import com.example.dating_app.model.UserDevice
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 class LoginActivity : AppCompatActivity() {
@@ -59,6 +62,21 @@ class LoginActivity : AppCompatActivity() {
                     val userResult = repository.getUser(uid)
                     userResult.onSuccess { user ->
                         if (user != null) {
+                            // Security: Log Device and History
+                            val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                            val deviceName = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+                            val userDevice = UserDevice(deviceId, deviceName)
+                            
+                            val logResult = repository.logLogin(uid, userDevice)
+                            logResult.onSuccess { isNewDevice ->
+                                if (isNewDevice) {
+                                    Toast.makeText(this@LoginActivity, "New device login detected!", Toast.LENGTH_LONG).show()
+                                }
+                            }
+
+                            // Force JWT (ID Token) Refresh
+                            FirebaseAuth.getInstance().currentUser?.getIdToken(true)
+
                             (application as MyApplication).initZegoService(uid, "${user.first_name} ${user.last_name}")
                         }
                         if (user?.pin.isNullOrEmpty()) {
@@ -69,10 +87,9 @@ class LoginActivity : AppCompatActivity() {
                             startActivity(Intent(this@LoginActivity, HomeActivity::class.java))
                         }
                         finish()
-                    }.onFailure {
-                        // Fallback if user data fetch fails
-                        startActivity(Intent(this@LoginActivity, HomeActivity::class.java))
-                        finish()
+                    }.onFailure { e ->
+                        Toast.makeText(this@LoginActivity, "Error fetching profile: ${e.message}", Toast.LENGTH_LONG).show()
+                        loginButton.isEnabled = true
                     }
                 }.onFailure { e ->
                     Toast.makeText(this@LoginActivity, "Login failed: ${e.message}", Toast.LENGTH_LONG).show()

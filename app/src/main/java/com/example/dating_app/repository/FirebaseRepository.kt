@@ -622,4 +622,56 @@ class FirebaseRepository {
             }
         awaitClose { subscription.remove() }
     }
+
+    fun observeUser(userId: String): Flow<User?> = callbackFlow {
+        val subscription = usersCollection.document(userId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                trySend(snapshot?.toObject(User::class.java))
+            }
+        awaitClose { subscription.remove() }
+    }
+
+    suspend fun markMessagesAsRead(currentUserId: String, chatPartnerId: String): Result<Unit> {
+        return try {
+            val unreadMessages = messagesCollection
+                .whereEqualTo("receiverId", currentUserId)
+                .whereEqualTo("senderId", chatPartnerId)
+                .whereEqualTo("isRead", false)
+                .get()
+                .await()
+
+            val batch = firestore.batch()
+            for (doc in unreadMessages.documents) {
+                batch.update(doc.reference, "isRead", true)
+            }
+            batch.commit().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun observeUnreadMessageCount(userId: String): Flow<Int> = callbackFlow {
+        val subscription = messagesCollection
+            .whereEqualTo("receiverId", userId)
+            .whereEqualTo("isRead", false)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                trySend(snapshot?.size() ?: 0)
+            }
+        awaitClose { subscription.remove() }
+    }
+
+    fun observeLastReceivedMessage(userId: String): Flow<Message?> = callbackFlow {
+        val subscription = messagesCollection
+            .whereEqualTo("receiverId", userId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(1)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                trySend(snapshot?.toObjects(Message::class.java)?.firstOrNull())
+            }
+        awaitClose { subscription.remove() }
+    }
 }

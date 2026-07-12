@@ -7,6 +7,7 @@ import android.net.Uri
 import com.example.dating_app.util.CloudinaryHelper
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.example.dating_app.model.LoginRecord
 import com.example.dating_app.model.UserDevice
 import com.google.firebase.firestore.FieldValue
@@ -367,7 +368,7 @@ class FirebaseRepository {
 
     suspend fun deleteMessage(messageId: String): Result<Unit> {
         return try {
-            messagesCollection.document(messageId).update("isDeletedForEveryone", true).await()
+            messagesCollection.document(messageId).update("deletedForEveryone", true).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

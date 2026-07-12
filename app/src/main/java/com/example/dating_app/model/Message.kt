@@ -21,7 +21,7 @@ data class Message(
     val mediaUrl: String? = null,
     val mediaPublicId: String? = null,
     val duration: String? = null,
-    val isEncrypted: Boolean = false,
+    val encrypted: Boolean = false,
     val selfDestructAt: Long? = null,
-    val isDeletedForEveryone: Boolean = false
+    val deletedForEveryone: Boolean = false
 )

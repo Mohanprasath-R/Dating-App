@@ -109,7 +109,8 @@ enum class CallType { NONE, AUDIO, VIDEO }
 fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
     var messageText by remember { mutableStateOf("") }
     val repository = remember { FirebaseRepository() }
-    val currentUser = remember { FirebaseAuth.getInstance().currentUser }
+    val auth = remember { FirebaseAuth.getInstance() }
+    val currentUser = auth.currentUser
     val messages = remember { mutableStateListOf<Message>() }
     var receiverUser by remember { mutableStateOf<User?>(null) }
     var currentUserProfile by remember { mutableStateOf<User?>(null) }
@@ -118,7 +119,7 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
     // Security States
     var isE2EEEnabled by remember { mutableStateOf(true) }
     var selfDestructSeconds by remember { mutableIntStateOf(0) }
-    val chatKey = remember(currentUser, receiverId) {
+    val chatKey = remember(currentUser?.uid, receiverId) {
         if (currentUser != null && receiverId.isNotEmpty()) {
             SecurityUtils.generateChatKey(currentUser.uid, receiverId)
         } else null
@@ -488,7 +489,7 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                                         senderId = it.uid,
                                         receiverId = receiverId,
                                         messageText = textToSend,
-                                        isEncrypted = isE2EEEnabled,
+                                        encrypted = isE2EEEnabled,
                                         selfDestructAt = if (selfDestructSeconds > 0) System.currentTimeMillis() + (selfDestructSeconds * 1000) else null,
                                         timestamp = System.currentTimeMillis()
                                     ))
@@ -568,7 +569,7 @@ fun ChatBubble(
     val time = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(message.timestamp))
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = alignment) {
-        if (message.selfDestructAt != null && !message.isDeletedForEveryone) {
+        if (message.selfDestructAt != null && !message.deletedForEveryone) {
             val currentTime = System.currentTimeMillis()
             val timeLeft = (message.selfDestructAt - currentTime) / 1000
             
@@ -583,22 +584,37 @@ fun ChatBubble(
         }
 
         Surface(
-            color = if (message.isDeletedForEveryone) Color.LightGray.copy(alpha = 0.2f) else bubbleColor,
+            color = if (message.deletedForEveryone) Color.LightGray.copy(alpha = 0.2f) else bubbleColor,
             shape = shape,
             tonalElevation = 1.dp,
             modifier = Modifier
                 .widthIn(max = if (message.messageType == MessageType.TEXT) 300.dp else 260.dp)
                 .combinedClickable(onClick = onMediaClick, onLongClick = onLongClick)
         ) {
-            if (message.isDeletedForEveryone) {
+            if (message.deletedForEveryone) {
                 Text(text = "This message was deleted", modifier = Modifier.padding(12.dp), color = Color.Gray, fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
             } else {
                 when (message.messageType) {
                     MessageType.TEXT -> {
-                        val displayContent = if (message.isEncrypted && chatKey != null) {
-                            SecurityUtils.decrypt(message.messageText, chatKey)
+                        val displayContent = if (message.encrypted) {
+                            if (chatKey != null) {
+                                SecurityUtils.decrypt(message.messageText, chatKey)
+                            } else {
+                                "[Encrypted Message]"
+                            }
                         } else message.messageText
-                        Text(text = displayContent, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = textColor, fontSize = 14.sp)
+                        
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = displayContent, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = textColor, fontSize = 14.sp)
+                            if (message.encrypted) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock, 
+                                    contentDescription = null, 
+                                    tint = textColor.copy(alpha = 0.5f), 
+                                    modifier = Modifier.size(10.dp).padding(end = 8.dp)
+                                )
+                            }
+                        }
                     }
                     MessageType.AUDIO -> {
                         val senderProfileImage = if (isMe) currentUserProfile?.profile_image else receiverUser?.profile_image

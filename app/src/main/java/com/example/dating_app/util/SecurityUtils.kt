@@ -38,12 +38,15 @@ object SecurityUtils {
         System.arraycopy(iv, 0, combined, 0, iv.size)
         System.arraycopy(encryptedData, 0, combined, iv.size, encryptedData.size)
         
-        return Base64.encodeToString(combined, Base64.DEFAULT)
+        return Base64.encodeToString(combined, Base64.NO_WRAP)
     }
 
     fun decrypt(encryptedText: String, secretKey: SecretKeySpec): String {
+        if (encryptedText.isBlank()) return ""
         return try {
-            val combined = Base64.decode(encryptedText, Base64.DEFAULT)
+            val combined = Base64.decode(encryptedText.trim(), Base64.NO_WRAP)
+            if (combined.size < IV_SIZE) return "[Invalid Format]"
+            
             val iv = combined.sliceArray(0 until IV_SIZE)
             val encryptedData = combined.sliceArray(IV_SIZE until combined.size)
             
@@ -54,6 +57,7 @@ object SecurityUtils {
             val decryptedData = cipher.doFinal(encryptedData)
             String(decryptedData, Charsets.UTF_8)
         } catch (e: Exception) {
+            android.util.Log.e("SecurityUtils", "Decryption failed: ${e.message}")
             "[Decryption Error]"
         }
     }

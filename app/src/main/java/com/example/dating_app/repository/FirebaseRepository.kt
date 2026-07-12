@@ -122,6 +122,14 @@ class FirebaseRepository {
         }
     }
 
+    suspend fun updateLocation(userId: String, lat: Double, lon: Double): Result<Unit> {
+        return updateProfile(userId, mapOf(
+            "latitude" to lat,
+            "longitude" to lon,
+            "updated_at" to System.currentTimeMillis()
+        ))
+    }
+
     suspend fun uploadImage(userId: String, imageUri: Uri, folderName: String): Result<String> {
         return uploadMedia(userId, imageUri, folderName, "image")
     }

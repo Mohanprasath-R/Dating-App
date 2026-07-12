@@ -61,6 +61,7 @@ import com.example.dating_app.model.Call
 import com.example.dating_app.repository.FirebaseRepository
 import com.google.firebase.auth.FirebaseAuth
 import coil.compose.AsyncImage
+import com.example.dating_app.util.LocationHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -414,7 +415,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                     )
                     else -> {
                         when (selectedTab) {
-                            HomeTab.Discovery -> DiscoveryScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
+                            HomeTab.Discovery -> DiscoveryScreen(
+                                currentUserProfile = currentUserProfile,
+                                onChatClick = onChatClick, 
+                                refreshTrigger = refreshTrigger
+                            )
                             HomeTab.Likes -> LikesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                             HomeTab.Matches -> MatchesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                             HomeTab.Message -> ChatListScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
@@ -1329,7 +1334,11 @@ fun MatchOverlay(matchedUser: User, onSendMessage: () -> Unit, onKeepSwiping: ()
 }
 
 @Composable
-fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) {
+fun DiscoveryScreen(
+    currentUserProfile: User?,
+    onChatClick: (String, String) -> Unit, 
+    refreshTrigger: Int = 0
+) {
     val repository = remember { FirebaseRepository() }
     val currentUser = remember { FirebaseAuth.getInstance().currentUser }
     val scope = rememberCoroutineScope()
@@ -1461,8 +1470,18 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
                                         ) {
                                             Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(6.dp))
+                                            val distanceText = if (currentUserProfile != null && profile.latitude != null && profile.longitude != null && profile.location_enabled) {
+                                                LocationHelper.calculateApproximateDistance(
+                                                    currentUserProfile!!.latitude ?: 0.0,
+                                                    currentUserProfile!!.longitude ?: 0.0,
+                                                    profile.latitude!!,
+                                                    profile.longitude!!
+                                                )
+                                            } else {
+                                                "Location hidden"
+                                            }
                                             Text(
-                                                text = "${profile.city} • 2km away",
+                                                text = "${profile.city} • $distanceText",
                                                 color = Color.White,
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold
@@ -1620,6 +1639,17 @@ fun ActionCircleButton(
 
 @Composable
 fun SettingsScreen() {
+    val repository = remember { FirebaseRepository() }
+    val auth = FirebaseAuth.getInstance()
+    val scope = rememberCoroutineScope()
+    var user by remember { mutableStateOf<User?>(null) }
+
+    LaunchedEffect(Unit) {
+        auth.currentUser?.uid?.let { uid ->
+            repository.getUser(uid).onSuccess { user = it }
+        }
+    }
+
     val items = listOf(
         "Account" to Icons.Default.Person,
         "Privacy" to Icons.Default.Lock,
@@ -1630,6 +1660,29 @@ fun SettingsScreen() {
     )
 
     LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
+        item {
+            // Location Security Toggle
+            ListItem(
+                headlineContent = { Text("Share Location") },
+                supportingContent = { Text("Enable to show approximate distance to others") },
+                leadingContent = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+                trailingContent = {
+                    Switch(
+                        checked = user?.location_enabled ?: true,
+                        onCheckedChange = { enabled ->
+                            user = user?.copy(location_enabled = enabled)
+                            scope.launch {
+                                auth.currentUser?.uid?.let { uid ->
+                                    repository.updateProfile(uid, mapOf("location_enabled" to enabled))
+                                }
+                            }
+                        }
+                    )
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6))
+        }
+
         items(items) { (title, icon) ->
             ListItem(
                 headlineContent = { Text(title) },

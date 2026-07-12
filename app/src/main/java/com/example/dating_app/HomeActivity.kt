@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -86,6 +87,7 @@ import java.util.*
 
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
@@ -289,64 +291,67 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
     ) {
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = { 
-                        Text(
-                            text = topBarTitle, 
-                            color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 24.sp
-                        ) 
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { 
-                            if (currentSubScreen != null) {
-                                currentSubScreen = null 
-                            } else if (profileSubScreen != null) {
-                                profileSubScreen = null
-                            } else {
-                                scope.launch { drawerState.open() } 
+                // Hide main top bar for profile screen as it has its own immersive header
+                if (currentSubScreen != "profile") {
+                    TopAppBar(
+                        title = { 
+                            Text(
+                                text = topBarTitle, 
+                                color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 24.sp
+                            ) 
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { 
+                                if (currentSubScreen != null) {
+                                    currentSubScreen = null 
+                                } else if (profileSubScreen != null) {
+                                    profileSubScreen = null
+                                } else {
+                                    scope.launch { drawerState.open() } 
+                                }
+                            }) {
+                                Icon(imageVector = if (isSubScreen) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu, contentDescription = "Navigation")
                             }
-                        }) {
-                            Icon(imageVector = if (isSubScreen) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu, contentDescription = "Navigation")
-                        }
-                    },
-                    actions = {
-                        if (!isSubScreen) {
-                            IconButton(onClick = { refreshTrigger++ }) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_heartbeat),
-                                    contentDescription = "Heartbeat",
-                                    tint = Color(0xFFFF1493),
-                                    modifier = Modifier.size(24.dp)
-                                )
+                        },
+                        actions = {
+                            if (!isSubScreen) {
+                                IconButton(onClick = { refreshTrigger++ }) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_heartbeat),
+                                        contentDescription = "Heartbeat",
+                                        tint = Color(0xFFFF1493),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                IconButton(onClick = { currentSubScreen = "filters" }) { 
+                                    Icon(Icons.Default.Tune, contentDescription = "Filters", tint = Color.Gray)
+                                }
+                                IconButton(onClick = { }) { 
+                                    Icon(Icons.Default.NotificationsNone, contentDescription = "Notifications", tint = Color.Gray)
+                                }
+                                // Added Profile Icon on the right side
+                                IconButton(
+                                    onClick = { 
+                                        currentSubScreen = "profile"
+                                    },
+                                    modifier = Modifier.padding(end = 8.dp)
+                                ) {
+                                    AsyncImage(
+                                        model = if (currentUserProfile?.profile_image?.isNotEmpty() == true) currentUserProfile?.profile_image else R.drawable.girl,
+                                        contentDescription = "Profile",
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .border(1.dp, Color(0xFFFF1493).copy(alpha = 0.2f), CircleShape),
+                                        contentScale = ContentScale.Crop,
+                                        placeholder = painterResource(id = R.drawable.girl)
+                                    )
+                                }
                             }
-                            IconButton(onClick = { currentSubScreen = "filters" }) { 
-                                Icon(Icons.Default.Tune, contentDescription = "Filters", tint = Color.Gray)
-                            }
-                            IconButton(onClick = { }) { 
-                                Icon(Icons.Default.NotificationsNone, contentDescription = "Notifications", tint = Color.Gray)
-                            }
-                            // Added Profile Icon on the right side
-                            IconButton(
-                                onClick = { 
-                                    currentSubScreen = "profile"
-                                },
-                                modifier = Modifier.padding(end = 8.dp)
-                            ) {
-                                AsyncImage(
-                                    model = if (currentUserProfile?.profile_image?.isNotEmpty() == true) currentUserProfile?.profile_image else R.drawable.girl,
-                                    contentDescription = "Profile",
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .border(1.dp, Color(0xFFFF1493).copy(alpha = 0.2f), CircleShape),
-                                    contentScale = ContentScale.Crop,
-                                    placeholder = painterResource(id = R.drawable.girl)
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
-                )
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                    )
+                }
             },
             floatingActionButton = {
                 if (currentSubScreen == null) {
@@ -407,8 +412,13 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                 }
             }
         ) { padding ->
+            val contentPadding = if (currentSubScreen == "profile") {
+                PaddingValues(bottom = padding.calculateBottomPadding())
+            } else {
+                padding
+            }
             Box(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.padding(padding)) {
+                Box(modifier = Modifier.padding(contentPadding)) {
                     when {
                         currentSubScreen == "blocked" -> BlockedListScreen()
                         currentSubScreen == "settings" -> SettingsScreen()
@@ -416,7 +426,8 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                         currentSubScreen == "filters" -> FiltersScreen()
                         currentSubScreen == "profile" -> UserProfileScreen(
                             onSubScreenChange = { profileSubScreen = it },
-                            requestedSubScreen = profileSubScreen
+                            requestedSubScreen = profileSubScreen,
+                            onBack = { currentSubScreen = null }
                         )
                         else -> {
                             when (selectedTab) {

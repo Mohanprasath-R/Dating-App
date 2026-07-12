@@ -6,30 +6,28 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import coil.compose.rememberAsyncImagePainter
 import com.datingapp.R
 import com.example.dating_app.model.User
 import com.example.dating_app.repository.FirebaseRepository
@@ -40,7 +38,8 @@ import java.util.Calendar
 @Composable
 fun UserProfileScreen(
     onSubScreenChange: (String?) -> Unit = {},
-    requestedSubScreen: String? = null
+    requestedSubScreen: String? = null,
+    onBack: () -> Unit = {}
 ) {
     var currentScreen by remember { mutableStateOf("profile") }
     var user by remember { mutableStateOf<User?>(null) }
@@ -50,7 +49,9 @@ fun UserProfileScreen(
     val auth = remember { FirebaseAuth.getInstance() }
     
     LaunchedEffect(requestedSubScreen) {
-        if (requestedSubScreen == null) {
+        if (requestedSubScreen != null) {
+            currentScreen = requestedSubScreen
+        } else {
             currentScreen = "profile"
         }
     }
@@ -85,12 +86,14 @@ fun UserProfileScreen(
 
     val displayUser = user!!
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     when (currentScreen) {
         "profile" -> MainProfileView(
             user = displayUser,
             onEditClick = { currentScreen = "edit" },
-            onDetailsClick = { currentScreen = "details" }
+            onDetailsClick = { currentScreen = "details" },
+            onBack = onBack
         )
         "details" -> ProfileDetailsView(
             user = displayUser,
@@ -108,16 +111,22 @@ fun UserProfileScreen(
                         "email" to updatedUser.email,
                         "phone" to updatedUser.phone,
                         "bio" to updatedUser.bio,
+                        "occupation" to updatedUser.occupation,
+                        "looking_for" to updatedUser.looking_for,
+                        "interests" to updatedUser.interests,
+                        "language" to updatedUser.language,
+                        "country" to updatedUser.country,
+                        "state" to updatedUser.state,
+                        "city" to updatedUser.city,
                         "profile_image" to updatedUser.profile_image,
-                        "cover_image" to updatedUser.cover_image,
                         "updated_at" to System.currentTimeMillis()
                     )
                     repository.updateProfile(uid, profileData).onSuccess {
                         user = updatedUser
                         currentScreen = "profile"
-                        Toast.makeText(auth.app.applicationContext, "Profile updated successfully", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
                     }.onFailure { e ->
-                        Toast.makeText(auth.app.applicationContext, "Failed to update profile: ${e.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Failed to update profile: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             },
@@ -127,182 +136,468 @@ fun UserProfileScreen(
 }
 
 @Composable
-fun MainProfileView(user: User, onEditClick: () -> Unit, onDetailsClick: () -> Unit) {
+fun MainProfileView(user: User, onEditClick: () -> Unit, onDetailsClick: () -> Unit, onBack: () -> Unit) {
     val scrollState = rememberScrollState()
     
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .background(Color(0xFFFAFAFA))
-    ) {
-        // Header with Cover and Profile Image
-        Box(modifier = Modifier.height(300.dp)) {
-            AsyncImage(
-                model = if (user.cover_image.isNotEmpty()) user.cover_image else R.drawable.girl,
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
-                contentScale = ContentScale.Crop,
-                placeholder = painterResource(id = R.drawable.girl)
-            )
-            
-            // More button
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                IconButton(onClick = onDetailsClick, modifier = Modifier.background(Color.Black.copy(0.3f), CircleShape)) {
-                    Icon(Icons.Default.List, contentDescription = "Details", tint = Color.White)
-                }
-            }
-
-            // Profile Image
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-            ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .background(Color.White)
+        ) {
+            // Large Top Image
+            Box(modifier = Modifier.fillMaxWidth().height(480.dp)) {
                 AsyncImage(
                     model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
                     contentDescription = null,
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .border(4.dp, Color.White, CircleShape),
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     placeholder = painterResource(id = R.drawable.girl)
                 )
-                // Edit icon on profile image
-                Box(
+                
+                // Overlay for Buttons
+                Row(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(4.dp)
-                        .size(32.dp)
-                        .background(Color(0xFFFF1493), CircleShape)
-                        .border(2.dp, Color.White, CircleShape)
-                        .clickable { onEditClick() },
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.background(Color.Black.copy(0.2f), CircleShape)
+                    ) {
+                        Icon(Icons.Default.ChevronLeft, contentDescription = "Back", tint = Color.White)
+                    }
+                    
+                    Row {
+                        IconButton(
+                            onClick = onEditClick,
+                            modifier = Modifier.background(Color.Black.copy(0.2f), CircleShape)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color.White)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(
+                            onClick = onDetailsClick,
+                            modifier = Modifier.background(Color.Black.copy(0.2f), CircleShape)
+                        ) {
+                            Icon(Icons.Default.MoreHoriz, contentDescription = "More", tint = Color.White)
+                        }
+                    }
                 }
+            }
+
+            // User Info Card (Overlapping the image slightly)
+            Column(
+                modifier = Modifier
+                    .offset(y = (-40).dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp))
+                    .background(Color.White)
+                    .padding(horizontal = 24.dp, vertical = 32.dp)
+            ) {
+                // Name and Age
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${user.first_name}, ${calculateAge(user.dob)}",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Verified",
+                        tint = Color(0xFF4285F4),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                // Occupation
+                Text(
+                    text = if(user.occupation.isNotEmpty()) user.occupation else "Photographer",
+                    fontSize = 18.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+
+                // Location
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.LocationOn,
+                        contentDescription = "Location",
+                        tint = Color(0xFFFF1493),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${if(user.city.isNotEmpty()) user.city else "New York"} \u2022 2 km away",
+                        fontSize = 16.sp,
+                        color = Color.Gray
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // About Me
+                Text(
+                    text = "About me",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Text(
+                    text = if (user.bio.isNotEmpty()) user.bio else "Love capturing beautiful moments and exploring new places.",
+                    fontSize = 16.sp,
+                    color = Color.Black.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    lineHeight = 22.sp
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Looking For
+                Text(
+                    text = "Looking for",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Row(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    val preferences = if(user.looking_for.isNotEmpty()) user.looking_for.split(",") else listOf("Serious Relationship", "Open to Chat")
+                    preferences.forEach { pref ->
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFFFF1493).copy(alpha = 0.1f),
+                            border = BorderStroke(1.dp, Color(0xFFFF1493).copy(alpha = 0.2f))
+                        ) {
+                            Text(
+                                text = pref.trim(),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = Color(0xFFFF1493),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Interests
+                Text(
+                    text = "Interests",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    val userInterests = user.interests.takeIf { it.isNotEmpty() } ?: listOf("Travel", "Photography", "Music", "Food")
+                    userInterests.take(4).forEach { name ->
+                        val icon = when(name.lowercase().trim()) {
+                            "travel" -> Icons.Default.Flight
+                            "photography" -> Icons.Default.CameraAlt
+                            "music" -> Icons.Default.MusicNote
+                            "food" -> Icons.Default.Favorite
+                            else -> Icons.Default.AutoAwesome
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFF5F5F5),
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(icon, contentDescription = name, tint = Color(0xFF9C27B0), modifier = Modifier.size(24.dp))
+                                }
+                            }
+                            Text(text = name, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(100.dp)) // Space for FAB
             }
         }
 
-        // User Info
+        // Floating Heart Button
+        FloatingActionButton(
+            onClick = { /* Handle Like */ },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(24.dp)
+                .size(64.dp),
+            containerColor = Color(0xFFFF1493),
+            contentColor = Color.White,
+            shape = CircleShape
+        ) {
+            Icon(Icons.Default.Favorite, contentDescription = "Like", modifier = Modifier.size(32.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditProfileView(user: User, onSave: (User) -> Unit, onBack: () -> Unit) {
+    var firstName by remember { mutableStateOf(user.first_name) }
+    var lastName by remember { mutableStateOf(user.last_name) }
+    var occupation by remember { mutableStateOf(user.occupation) }
+    var bio by remember { mutableStateOf(user.bio) }
+    var lookingFor by remember { mutableStateOf(user.looking_for) }
+    var interests by remember { mutableStateOf(user.interests.joinToString(", ")) }
+    var phone by remember { mutableStateOf(user.phone) }
+    var language by remember { mutableStateOf(user.language) }
+    var country by remember { mutableStateOf(user.country) }
+    var state by remember { mutableStateOf(user.state) }
+    var city by remember { mutableStateOf(user.city) }
+
+    var profileImageUri by remember { mutableStateOf<Uri?>(null) }
+    var isUploading by remember { mutableStateOf(false) }
+
+    val scope = rememberCoroutineScope()
+    val repository = remember { FirebaseRepository() }
+    val context = LocalContext.current
+
+    val profilePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        profileImageUri = uri
+    }
+
+    fun handleSave() {
+        scope.launch {
+            isUploading = true
+            try {
+                var finalProfileUrl = user.profile_image
+
+                profileImageUri?.let { uri ->
+                    repository.uploadImageToCloudinary(uri, "profile_images").onSuccess { url ->
+                        finalProfileUrl = url
+                    }.onFailure {
+                        Toast.makeText(context, "Profile image upload failed", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                onSave(user.copy(
+                    first_name = firstName,
+                    last_name = lastName,
+                    occupation = occupation,
+                    bio = bio,
+                    looking_for = lookingFor,
+                    interests = interests.split(",").map { it.trim() }.filter { it.isNotEmpty() },
+                    profile_image = finalProfileUrl,
+                    phone = phone,
+                    language = language,
+                    country = country,
+                    state = state,
+                    city = city,
+                    updated_at = System.currentTimeMillis()
+                ))
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                isUploading = false
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { 
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("Edit Profile", fontWeight = FontWeight.Bold, fontSize = 20.sp) 
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ChevronLeft, contentDescription = "Back", modifier = Modifier.size(32.dp))
+                    }
+                },
+                actions = {
+                    TextButton(onClick = { handleSave() }) {
+                        Text("Save", color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+            )
+        }
+    ) { padding ->
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "${user.first_name} ${user.last_name}",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
+            // Circular Profile Image
+            Box(modifier = Modifier.size(150.dp)) {
+                AsyncImage(
+                    model = profileImageUri ?: if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
+                    contentDescription = "Profile Image",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                    placeholder = painterResource(id = R.drawable.girl)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
-                if (user.email_verified) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2196F3), modifier = Modifier.size(20.dp))
+                IconButton(
+                    onClick = { profilePicker.launch("image/*") },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .background(Color.White, CircleShape)
+                        .size(40.dp)
+                        .shadow(4.dp, CircleShape)
+                ) {
+                    Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Change Photo", modifier = Modifier.size(20.dp), tint = Color.Black)
                 }
-            }
-            Text(text = "@${user.username}", color = Color.Gray, fontSize = 14.sp)
-            
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                Box(modifier = Modifier.size(8.dp).background(if(user.is_online) Color.Green else Color.Gray, CircleShape))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = if(user.is_online) "Online" else "Offline", color = Color.Gray, fontSize = 12.sp)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Button(
-                onClick = onEditClick,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFFFF1493)),
-                border = BorderStroke(1.dp, Color(0xFFFF1493)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Edit Profile")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = if (user.bio.isNotEmpty()) user.bio else "Love traveling, good coffee and meaningful conversations. ✨",
-                textAlign = TextAlign.Center,
-                fontSize = 14.sp,
-                color = Color.Black.copy(alpha = 0.8f)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Info Tags
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                ProfileTag(icon = Icons.Default.Person, text = calculateAge(user.dob), subtext = "Age")
-                ProfileTag(icon = Icons.Default.Face, text = if(user.gender.isNotEmpty()) user.gender else "Female", subtext = "Gender")
-                ProfileTag(icon = Icons.Default.LocationOn, text = if(user.city.isNotEmpty()) user.city else "New York", subtext = if(user.country.isNotEmpty()) user.country else "USA")
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Stats
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                StatItem(label = "Likes", count = user.likes.toString())
-                StatItem(label = "Matches", count = user.matches.toString())
-                StatItem(label = "Photos", count = user.photos_count.toString())
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Photos Grid placeholder
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                val photos = listOf(R.drawable.girl, R.drawable.girl, R.drawable.girl)
-                photos.forEach {
-                    Image(
-                        painter = painterResource(id = it),
-                        contentDescription = null,
-                        modifier = Modifier.size(100.dp).clip(RoundedCornerShape(12.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
-            
-            Text(
-                text = "View All Photos (${user.photos_count})",
-                color = Color(0xFFFF1493),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // About Me
+            // Photos Section
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(text = "About Me", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "Bio", fontSize = 12.sp, color = Color.Gray)
-                Text(text = if (user.bio.isNotEmpty()) user.bio else "No bio available", fontSize = 14.sp)
-                
+                Text(text = "Photos", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Language", fontSize = 12.sp, color = Color.Gray)
-                        Text(text = if(user.language.isNotEmpty()) user.language else "English", fontSize = 14.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    repeat(3) {
+                        Image(
+                            painter = painterResource(id = R.drawable.girl),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(0.8f)
+                                .clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop
+                        )
                     }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Country", fontSize = 12.sp, color = Color.Gray)
-                        Text(text = if(user.country.isNotEmpty()) user.country else "USA", fontSize = 14.sp)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(0.8f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFF5F5F5)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Photo", tint = Color(0xFFFF1493), modifier = Modifier.size(32.dp))
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(32.dp))
+
+            // Name Field
+            EditProfileField(label = "First Name", value = firstName, onValueChange = { firstName = it }, placeholder = "Enter your first name")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Last Name Field
+            EditProfileField(label = "Last Name", value = lastName, onValueChange = { lastName = it }, placeholder = "Enter your last name")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Bio Field
+            EditProfileField(label = "About me", value = bio, onValueChange = { bio = it }, minHeight = 100.dp, placeholder = "Tell something about yourself...")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Phone Field
+            EditProfileField(label = "Phone", value = phone, onValueChange = { phone = it }, placeholder = "+1 234 567 890")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Occupation Field
+            EditProfileField(label = "Occupation", value = occupation, onValueChange = { occupation = it }, placeholder = "Photographer")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Looking For Field
+            EditProfileField(label = "Looking for", value = lookingFor, onValueChange = { lookingFor = it }, placeholder = "Serious Relationship, Open to Chat")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Language Field
+            EditProfileField(label = "Language", value = language, onValueChange = { language = it }, placeholder = "English, Spanish")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Country Field
+            EditProfileField(label = "Country", value = country, onValueChange = { country = it }, placeholder = "USA")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // State Field
+            EditProfileField(label = "State", value = state, onValueChange = { state = it }, placeholder = "New York")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // City Field
+            EditProfileField(label = "City", value = city, onValueChange = { city = it }, placeholder = "Los Angeles")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Interests Field
+            EditProfileField(label = "Interests", value = interests, onValueChange = { interests = it }, placeholder = "Travel, Music, Photography")
+
+            Spacer(modifier = Modifier.height(40.dp))
+        }
+
+        if (isUploading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(0.3f))
+                    .clickable(enabled = false) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color(0xFFFF1493))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Saving changes...", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EditProfileField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    minHeight: androidx.compose.ui.unit.Dp = 0.dp
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(text = label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Spacer(modifier = Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp))
+                .padding(16.dp)
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (minHeight > 0.dp) Modifier.heightIn(min = minHeight) else Modifier),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Black)
+            )
+            if (value.isEmpty()) {
+                Text(placeholder, color = Color.Gray)
+            }
         }
     }
 }
@@ -318,285 +613,56 @@ fun calculateAge(dob: String): String {
     } catch (e: Exception) { "26" }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileDetailsView(user: User, onBack: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
-    ) {
-        DetailSection(title = "Personal Information", icon = Icons.Default.Person) {
-            DetailItem(label = "Username", value = user.username)
-            DetailItem(label = "First Name", value = user.first_name)
-            DetailItem(label = "Last Name", value = user.last_name)
-            DetailItem(label = "Email", value = user.email, isVerified = user.email_verified)
-            DetailItem(label = "Phone", value = user.phone, isVerified = user.phone_verified)
-            DetailItem(label = "Gender", value = user.gender)
-            DetailItem(label = "Date of Birth", value = user.dob)
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        DetailSection(title = "Location & Preferences", icon = Icons.Default.LocationOn) {
-            DetailItem(label = "Country", value = user.country)
-            DetailItem(label = "State", value = user.state)
-            DetailItem(label = "City", value = user.city)
-            DetailItem(label = "Language", value = user.language)
-            DetailItem(label = "Timezone", value = user.timezone)
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        DetailSection(title = "Account Status", icon = Icons.Default.Info) {
-            DetailItem(label = "Is Online", value = if(user.is_online) "Online" else "Offline", showDot = true, dotColor = if(user.is_online) Color.Green else Color.Gray)
-            DetailItem(label = "Last Seen", value = user.last_seen.toString())
-            DetailItem(label = "Account Status", value = user.account_status, statusColor = Color(0xFF4CAF50))
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        DetailSection(title = "Security", icon = Icons.Default.Security) {
-            DetailItem(label = "2FA (MFA)", value = "Enabled (Standard)")
-            DetailItem(label = "E2EE", value = "Enabled")
-            DetailItem(label = "Login History", value = "View History")
-            DetailItem(label = "Device Manager", value = "Managed")
-        }
-    }
-}
-
-@Composable
-fun EditProfileView(user: User, onSave: (User) -> Unit, onBack: () -> Unit) {
-    var username by remember { mutableStateOf(user.username) }
-    var firstName by remember { mutableStateOf(user.first_name) }
-    var lastName by remember { mutableStateOf(user.last_name) }
-    var email by remember { mutableStateOf(user.email) }
-    var phone by remember { mutableStateOf(user.phone) }
-    var bio by remember { mutableStateOf(user.bio) }
-
-    var profileImageUri by remember { mutableStateOf<Uri?>(null) }
-    var coverImageUri by remember { mutableStateOf<Uri?>(null) }
-    var isUploading by remember { mutableStateOf(false) }
-
-    val scope = rememberCoroutineScope()
-    val repository = remember { FirebaseRepository() }
-    val context = androidx.compose.ui.platform.LocalContext.current
-
-    val profilePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        profileImageUri = uri
-    }
-
-    val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        coverImageUri = uri
-    }
-
-    fun handleSave() {
-        scope.launch {
-            isUploading = true
-            try {
-                var finalProfileUrl = user.profile_image
-                var finalCoverUrl = user.cover_image
-
-                profileImageUri?.let { uri ->
-                    repository.uploadImageToCloudinary(uri, "profile_images").onSuccess { url ->
-                        finalProfileUrl = url
-                    }.onFailure {
-                        Toast.makeText(context, "Profile image upload failed", Toast.LENGTH_SHORT).show()
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Profile Details", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ChevronLeft, contentDescription = "Back", modifier = Modifier.size(32.dp))
                     }
-                }
-
-                coverImageUri?.let { uri ->
-                    repository.uploadImageToCloudinary(uri, "cover_images").onSuccess { url ->
-                        finalCoverUrl = url
-                    }.onFailure {
-                        Toast.makeText(context, "Cover image upload failed", Toast.LENGTH_SHORT).show()
-                    }
-                }
-
-                onSave(user.copy(
-                    username = username,
-                    first_name = firstName,
-                    last_name = lastName,
-                    email = email,
-                    phone = phone,
-                    bio = bio,
-                    profile_image = finalProfileUrl,
-                    cover_image = finalCoverUrl
-                ))
-            } catch (e: Exception) {
-                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-            } finally {
-                isUploading = false
-            }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+            )
         }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(16.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TextButton(onClick = onBack) { Text("Cancel", color = Color(0xFFFF1493)) }
-                TextButton(onClick = { handleSave() }) {
-                    Text("Save", color = Color(0xFFFF1493), fontWeight = FontWeight.Bold)
-                }
+            DetailSection(title = "Personal Information", icon = Icons.Default.Person) {
+                DetailItem(label = "Username", value = user.username)
+                DetailItem(label = "Email", value = user.email, isVerified = user.email_verified)
+                DetailItem(label = "Phone", value = user.phone, isVerified = user.phone_verified)
+                DetailItem(label = "Gender", value = user.gender)
+                DetailItem(label = "Date of Birth", value = user.dob)
+                DetailItem(label = "Occupation", value = user.occupation)
             }
-
-            // Cover Image Edit
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.LightGray.copy(0.3f))
-                    .clickable { coverPicker.launch("image/*") }
-            ) {
-                AsyncImage(
-                    model = coverImageUri ?: if (user.cover_image.isNotEmpty()) user.cover_image else R.drawable.girl,
-                    contentDescription = "Cover Image",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    placeholder = painterResource(id = R.drawable.girl)
-                )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                        .background(Color.Black.copy(0.5f), CircleShape)
-                        .padding(8.dp)
-                ) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-            }
-
+            
             Spacer(modifier = Modifier.height(16.dp))
-
-            // Profile Image Edit
-            Box(modifier = Modifier.size(120.dp)) {
-                AsyncImage(
-                    model = profileImageUri ?: if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
-                    contentDescription = "Profile Image",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape)
-                        .border(2.dp, Color.White, CircleShape),
-                    contentScale = ContentScale.Crop,
-                    placeholder = painterResource(id = R.drawable.girl)
-                )
-                IconButton(
-                    onClick = { profilePicker.launch("image/*") },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .background(Color.White, CircleShape)
-                        .size(32.dp)
-                        .border(1.dp, Color.LightGray, CircleShape)
-                ) {
-                    Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.Gray)
-                }
+            
+            DetailSection(title = "Location & Preferences", icon = Icons.Default.LocationOn) {
+                DetailItem(label = "Country", value = user.country)
+                DetailItem(label = "State", value = user.state)
+                DetailItem(label = "City", value = user.city)
+                DetailItem(label = "Language", value = user.language)
+                DetailItem(label = "Looking for", value = user.looking_for)
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            EditField(label = "Username", value = username, onValueChange = { username = it })
-            EditField(label = "First Name", value = firstName, onValueChange = { firstName = it })
-            EditField(label = "Last Name", value = lastName, onValueChange = { lastName = it })
-            EditField(label = "Email", value = email, onValueChange = { email = it })
-            EditField(label = "Phone", value = phone, onValueChange = { phone = it })
-            EditField(label = "Bio", value = bio, onValueChange = { bio = it }, isLong = true)
-
+            
             Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = { handleSave() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1493)),
-                shape = RoundedCornerShape(12.dp),
-                enabled = !isUploading
-            ) {
-                if (isUploading) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("Save Changes", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-        }
-
-        if (isUploading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(0.3f))
-                    .clickable(enabled = false) {},
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = Color(0xFFFF1493))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Uploading images...", color = Color.White, fontWeight = FontWeight.Bold)
-                }
+            
+            DetailSection(title = "Account Status", icon = Icons.Default.Info) {
+                DetailItem(label = "Is Online", value = if(user.is_online) "Online" else "Offline", showDot = true, dotColor = if(user.is_online) Color.Green else Color.Gray)
+                DetailItem(label = "Last Seen", value = user.last_seen.toString())
+                DetailItem(label = "Account Status", value = user.account_status, statusColor = Color(0xFF4CAF50))
             }
         }
-    }
-}
-
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun EditField(label: String, value: String, onValueChange: (String) -> Unit, isLong: Boolean = false) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Text(text = label, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp))
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            colors = TextFieldDefaults.outlinedTextFieldColors(
-                focusedBorderColor = Color(0xFFFF1493),
-                unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f)
-            ),
-            minLines = if(isLong) 3 else 1
-        )
-    }
-}
-
-@Composable
-fun ProfileTag(icon: ImageVector, text: String, subtext: String) {
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
-            .border(1.dp, Color.LightGray.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFFFF1493))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(text = text, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        }
-        Text(text = subtext, fontSize = 10.sp, color = Color.Gray)
-    }
-}
-
-@Composable
-fun StatItem(label: String, count: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = count, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text(text = label, fontSize = 12.sp, color = Color.Gray)
     }
 }
 

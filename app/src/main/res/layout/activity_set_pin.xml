@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:padding="24dp"
+    tools:context=".SetPinActivity">
+
+    <ImageView
+        android:id="@+id/back_button"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_launcher_foreground"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:tint="@color/black" />
+
+    <ImageView
+        android:id="@+id/logo_heart"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:layout_marginTop="48dp"
+        android:src="@drawable/icon"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/back_button" />
+
+    <TextView
+        android:id="@+id/set_pin_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="@string/set_your_pin"
+        android:textColor="@color/primary_pink"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/logo_heart" />
+
+    <TextView
+        android:id="@+id/set_pin_subtitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="@string/pin_description"
+        android:textColor="@color/text_gray"
+        android:textSize="16sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/set_pin_title" />
+
+    <LinearLayout
+        android:id="@+id/pin_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="48dp"
+        android:orientation="vertical"
+        app:layout_constraintTop_toBottomOf="@id/set_pin_subtitle">
+
+        <!-- PIN -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="@drawable/edit_text_background"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp">
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@android:drawable/ic_lock_idle_lock"
+                app:tint="@color/text_gray" />
+            <EditText
+                android:id="@+id/pin_input"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginStart="12dp"
+                android:background="@null"
+                android:hint="@string/set_pin"
+                android:inputType="numberPassword"
+                android:maxLength="4"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <!-- Confirm PIN -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/edit_text_background"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp">
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@android:drawable/ic_lock_idle_lock"
+                app:tint="@color/text_gray" />
+            <EditText
+                android:id="@+id/confirm_pin_input"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginStart="12dp"
+                android:background="@null"
+                android:hint="@string/confirm_pin"
+                android:inputType="numberPassword"
+                android:maxLength="4"
+                android:textSize="16sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/save_pin_button"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="48dp"
+        android:background="@drawable/rounded_button"
+        android:text="@string/save_pin"
+        android:textAllCaps="false"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:backgroundTint="@null"
+        app:layout_constraintTop_toBottomOf="@id/pin_container" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

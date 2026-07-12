@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="150dp"
+    android:viewportWidth="200"
+    android:viewportHeight="150">
+    <!-- Girl's Sleeve (Right) -->
+    <path
+        android:fillColor="#C2185B"
+        android:pathData="M200,50 L120,60 L125,100 L200,110 Z" />
+
+    <!-- Girl's Hand (Overlapping Handshake Grip) -->
+    <path
+        android:fillColor="#FFDBAC"
+        android:pathData="M120,60
+            L60,75
+            C50,78 50,92 60,95
+            L90,105
+            L125,100 Z" />
+
+    <!-- Handshake Crease / Finger Detail -->
+    <path
+        android:strokeColor="#D1A07B"
+        android:strokeWidth="2"
+        android:pathData="M85,75 L55,82 M85,85 L55,90" />
+</vector>

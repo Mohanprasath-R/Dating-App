@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:fillAfter="true"
+    android:shareInterpolator="true">
+
+    <!-- Move towards center -->
+    <translate
+        android:fromXDelta="100%p"
+        android:toXDelta="-18%p"
+        android:duration="1200"
+        android:interpolator="@android:anim/decelerate_interpolator"/>
+
+    <!-- Lean towards boy -->
+    <rotate
+        android:fromDegrees="0"
+        android:toDegrees="-5"
+        android:pivotX="15%"
+        android:pivotY="100%"
+        android:duration="1200"
+        android:fillAfter="true"/>
+
+    <!-- Slight zoom -->
+    <scale
+        android:fromXScale="1.0"
+        android:toXScale="1.03"
+        android:fromYScale="1.0"
+        android:toYScale="1.03"
+        android:pivotX="15%"
+        android:pivotY="100%"
+        android:duration="1200"
+        android:fillAfter="true"/>
+
+</set>

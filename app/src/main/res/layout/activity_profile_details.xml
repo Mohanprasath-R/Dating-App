@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFBFC">
+
+    <LinearLayout
+        android:id="@+id/header_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Branded Top Bar -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/white"
+            android:paddingHorizontal="16dp">
+
+            <ImageView
+                android:id="@+id/btn_menu"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_centerVertical="true"
+                android:src="@android:drawable/ic_menu_sort_by_size"
+                app:tint="@color/black" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:text="Profile Details"
+                android:textColor="#FF1493"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/btn_notifications"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:src="@android:drawable/ic_popup_reminder"
+                app:tint="@color/black" />
+        </RelativeLayout>
+
+
+    </LinearLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/header_container">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- Personal Info Section -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="@color/white"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:cardUseCompatPadding="true">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <FrameLayout
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:background="@drawable/circle_bg_magenta"
+                            android:backgroundTint="#FFF0F5">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_gravity="center"
+                                android:src="@android:drawable/ic_menu_myplaces"
+                                app:tint="#FF1493" />
+                        </FrameLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:text="Personal Information"
+                            android:textColor="#FF1493"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <include
+                        android:id="@+id/row_username"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_first_name"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_last_name"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_email"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_phone"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_gender"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_dob"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_profile_image"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_cover_image"
+                        layout="@layout/item_detail_row" />
+
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Location Section -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:cardBackgroundColor="@color/white"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:cardUseCompatPadding="true">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <FrameLayout
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:background="@drawable/circle_bg_magenta"
+                            android:backgroundTint="#FFF0F5">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_gravity="center"
+                                android:src="@android:drawable/ic_menu_mylocation"
+                                app:tint="#FF1493" />
+                        </FrameLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:text="Location &amp; Preferences"
+                            android:textColor="#FF1493"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <include
+                        android:id="@+id/row_country"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_state"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_city"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_language"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_timezone"
+                        layout="@layout/item_detail_row" />
+
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Account Status Section -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:cardBackgroundColor="@color/white"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:cardUseCompatPadding="true">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <FrameLayout
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:background="@drawable/circle_bg_magenta"
+                            android:backgroundTint="#FFF0F5">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_gravity="center"
+                                android:src="@android:drawable/ic_menu_info_details"
+                                app:tint="#FF1493" />
+                        </FrameLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:text="Account Status"
+                            android:textColor="#FF1493"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <include
+                        android:id="@+id/row_is_online"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_last_seen"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_email_verified_status"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_phone_verified_status"
+                        layout="@layout/item_detail_row" />
+
+                    <include
+                        android:id="@+id/row_status"
+                        layout="@layout/item_detail_row" />
+
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btn_edit"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="24dp"
+        android:src="@android:drawable/btn_star_big_on"
+        app:backgroundTint="#FF1493"
+        app:tint="@color/white" />
+
+</RelativeLayout>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="primary_pink">#FF2D6C</color>
+    <color name="secondary_pink">#FF8DA7</color>
+    <color name="bg_gray">#F9FAFB</color>
+    <color name="text_black">#111827</color>
+    <color name="text_gray">#6B7280</color>
+    <color name="border_gray">#E5E7EB</color>
+    <color name="dark_bg">#0D0012</color>
+    <color name="match_pink">#FF007A</color>
+    <color name="match_purple">#4A00E0</color>
+    <color name="glow_pink">#FF1493</color>
+</resources>

@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="150dp"
+    android:viewportWidth="200"
+    android:viewportHeight="150">
+    <!-- Boy's Sleeve (Left) -->
+    <path
+        android:fillColor="#283593"
+        android:pathData="M0,50 L80,60 L75,100 L0,110 Z" />
+
+    <!-- Boy's Hand (Simplified Handshake Grip) -->
+    <path
+        android:fillColor="#FFDBAC"
+        android:pathData="M80,60
+            L140,75
+            C150,78 150,92 140,95
+            L110,105
+            L75,100 Z" />
+
+    <!-- Handshake Crease / Finger Detail -->
+    <path
+        android:strokeColor="#D1A07B"
+        android:strokeWidth="2"
+        android:pathData="M115,75 L145,82 M115,85 L145,90" />
+</vector>

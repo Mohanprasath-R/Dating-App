@@ -26,6 +26,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -33,6 +34,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -66,8 +70,10 @@ import kotlin.math.roundToInt
 import com.datingapp.R
 import com.example.dating_app.model.User
 import com.example.dating_app.model.Message
+import com.example.dating_app.model.MessageType
 import com.example.dating_app.model.Call
 import com.example.dating_app.repository.FirebaseRepository
+import com.example.dating_app.util.SecurityUtils
 import com.google.firebase.auth.FirebaseAuth
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
@@ -1296,7 +1302,7 @@ fun ConnectRoomItem(user: User, modifier: Modifier = Modifier, onClick: () -> Un
 fun FloatingHeartsBackground() {
     val infiniteTransition = rememberInfiniteTransition(label = "hearts")
     
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         repeat(15) { i ->
             val xSeed = (i * 73) % 100 / 100f
             val duration = 6000 + (i * 400) % 4000
@@ -1349,17 +1355,19 @@ fun FloatingHeartsBackground() {
                 ),
                 label = "xSway"
             )
-
-            val xPos = maxWidth * xSeed + xSway.dp
-            val yPos = maxHeight * yProgress
             
             Icon(
                 imageVector = Icons.Default.Favorite,
                 contentDescription = null,
                 tint = Color.White.copy(alpha = alpha),
                 modifier = Modifier
-                    .offset(x = xPos, y = yPos)
-                    .scale(scale)
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationX = (size.width * xSeed) + xSway.dp.toPx()
+                        translationY = size.height * yProgress
+                        scaleX = scale
+                        scaleY = scale
+                    }
                     .size(24.dp)
             )
         }

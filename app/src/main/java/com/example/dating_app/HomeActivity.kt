@@ -362,37 +362,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                             delay(3000) // Show for 3 seconds
                             showText = false
                         }
-                        
-                        AnimatedVisibility(
-                            visible = showText,
-                            enter = slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }) + fadeIn(),
-                            exit = slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }) + fadeOut()
-                        ) {
-                            Surface(
-                                color = Color(0xFFFF1493),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.padding(end = 12.dp)
-                            ) {
-                                Text(
-                                    text = "Discover Your Destiny ✨",
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
 
-                        FloatingActionButton(
-                            onClick = { 
-                                showAstrologyModal = true
-                            },
-                            containerColor = Color(0xFFFF1493),
-                            contentColor = Color.White,
-                            shape = CircleShape
-                        ) {
-                            Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = "Astrology", modifier = Modifier.size(24.dp))
-                        }
                     }
                 }
             },
@@ -1201,20 +1171,6 @@ fun MatchesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0
                     }
                 }
             }
-            
-            // Sparkles FAB
-            FloatingActionButton(
-                onClick = { },
-                containerColor = Color(0xFFFF007F),
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(24.dp)
-                    .size(64.dp)
-            ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(32.dp))
-            }
         }
     }
 }
@@ -1570,23 +1526,49 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.Bottom
                                 ) {
-                                    Surface(
-                                        color = Color.White.copy(alpha = 0.2f),
-                                        shape = RoundedCornerShape(20.dp),
-                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Surface(
+                                            color = Color.White.copy(alpha = 0.2f),
+                                            shape = RoundedCornerShape(20.dp),
+                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
                                         ) {
-                                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "${profile.city} • 2km away",
-                                                color = Color.White,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                            ) {
+                                                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "${profile.city} • 2km away",
+                                                    color = Color.White,
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                        
+                                        var isMutualLike by remember(profile.id) { mutableStateOf(false) }
+                                        LaunchedEffect(profile.id) {
+                                            if (currentUser != null) {
+                                                val theyLikedMeSnapshot = repository.getLikedByUsers(currentUser.uid).getOrDefault(emptyList())
+                                                isMutualLike = theyLikedMeSnapshot.any { it.id == profile.id }
+                                            }
+                                        }
+
+                                        if (isMutualLike) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            IconButton(
+                                                onClick = { onChatClick(profile.first_name, profile.id) },
+                                                modifier = Modifier
+                                                    .size(48.dp)
+                                                    .background(Color(0xFFFF1493), CircleShape)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ChatBubble,
+                                                    contentDescription = "Message",
+                                                    tint = Color.White
+                                                )
+                                            }
                                         }
                                     }
                                     

@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.ui.unit.sp
@@ -46,6 +47,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.scale
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import kotlin.math.roundToInt
 import com.datingapp.R
 import com.example.dating_app.model.User
@@ -83,9 +90,20 @@ class HomeActivity : ComponentActivity() {
 enum class HomeTab(val label: String, val icon: ImageVector) {
     Discovery("Discover", Icons.Default.Explore),
     Likes("Likes", Icons.Default.FavoriteBorder),
-    Matches("Matches", Icons.Default.Favorite),
+    Matches("Matches", Icons.Default.FavoriteBorder),
     Message("Message", Icons.Default.ChatBubbleOutline),
-    Profile("Profile", Icons.Default.PersonOutline)
+    Chat("Chat", Icons.Default.AutoAwesome)
+}
+
+private fun getAge(dob: String): String {
+    return try {
+        val parts = dob.split("/")
+        if (parts.size == 3) {
+            val year = parts[2].toInt()
+            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+            (currentYear - year).toString()
+        } else "20"
+    } catch (e: Exception) { "20" }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -138,9 +156,19 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
 
     val topBarTitle = when {
         currentSubScreen == "blocked" -> "Blocked List"
+        currentSubScreen == "profile" -> "Profile"
+        currentSubScreen == "settings" -> "Settings"
+        currentSubScreen == "safety" -> "Safety Center"
+        currentSubScreen == "filters" -> "Filters"
         profileSubScreen == "details" -> "Profile Details"
         profileSubScreen == "edit" -> "Edit Profile"
-        else -> "HeyDate"
+        else -> when (selectedTab) {
+            HomeTab.Discovery -> "Discovery"
+            HomeTab.Likes -> "Likes"
+            HomeTab.Matches -> "Matches"
+            HomeTab.Message -> "Messages"
+            HomeTab.Chat -> "Chat"
+        }
     }
 
     val isSubScreen = currentSubScreen != null || profileSubScreen != null
@@ -172,8 +200,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                         text = "View Profile", fontSize = 14.sp, color = Color(0xFFFF1493),
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.clickable { 
-                            selectedTab = HomeTab.Profile
-                            currentSubScreen = null
+                            currentSubScreen = "profile"
                             scope.launch { drawerState.close() }
                         }
                     )
@@ -251,15 +278,40 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                             IconButton(onClick = { refreshTrigger++ }) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_heartbeat),
-                                    contentDescription = "Refresh",
+                                    contentDescription = "Heartbeat",
                                     tint = Color(0xFFFF1493),
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
                             IconButton(onClick = { currentSubScreen = "filters" }) { 
-                                Icon(Icons.Default.FilterList, contentDescription = "Filters", tint = Color.Gray)
+                                Icon(Icons.Default.Tune, contentDescription = "Filters", tint = Color.Gray)
                             }
-                            IconButton(onClick = { }) { Icon(Icons.Default.NotificationsNone, contentDescription = "Notifications") }
+                            IconButton(onClick = { }) { 
+                                BadgedBox(
+                                    badge = { Badge(containerColor = Color.Red) { Text("3") } },
+                                    modifier = Modifier.padding(end = 8.dp)
+                                ) {
+                                    Icon(Icons.Default.NotificationsNone, contentDescription = "Notifications", tint = Color.Gray)
+                                }
+                            }
+                            // Added Profile Icon on the right side
+                            IconButton(
+                                onClick = { 
+                                    currentSubScreen = "profile"
+                                },
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                AsyncImage(
+                                    model = if (currentUserProfile?.profile_image?.isNotEmpty() == true) currentUserProfile?.profile_image else R.drawable.girl,
+                                    contentDescription = "Profile",
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, Color(0xFFFF1493).copy(alpha = 0.2f), CircleShape),
+                                    contentScale = ContentScale.Crop,
+                                    placeholder = painterResource(id = R.drawable.girl)
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -320,11 +372,28 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                             NavigationBarItem(
                                 selected = selectedTab == tab,
                                 onClick = { selectedTab = tab },
-                                icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                label = { Text(tab.label) },
+                                icon = { 
+                                    val iconModifier = Modifier.size(26.dp)
+                                    when (tab) {
+                                        HomeTab.Discovery -> Icon(Icons.Default.Explore, contentDescription = null, modifier = iconModifier)
+                                        HomeTab.Likes -> Icon(Icons.Default.FavoriteBorder, contentDescription = null, modifier = iconModifier)
+                                        HomeTab.Matches -> Icon(painter = painterResource(id = R.drawable.ic_hearts), contentDescription = null, modifier = iconModifier)
+                                        HomeTab.Message -> {
+                                            BadgedBox(
+                                                badge = { Badge(containerColor = Color(0xFFFF1493)) { Text("3", color = Color.White) } }
+                                            ) {
+                                                Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, modifier = iconModifier)
+                                            }
+                                        }
+                                        HomeTab.Chat -> Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = iconModifier)
+                                    }
+                                },
+                                label = { Text(tab.label, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = Color(0xFFFF1493), selectedTextColor = Color(0xFFFF1493),
-                                    unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray,
+                                    selectedIconColor = Color(0xFFFF1493), 
+                                    selectedTextColor = Color(0xFFFF1493),
+                                    unselectedIconColor = Color.Gray, 
+                                    unselectedTextColor = Color.Gray,
                                     indicatorColor = Color(0xFFFF1493).copy(alpha = 0.1f)
                                 )
                             )
@@ -339,15 +408,20 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                     currentSubScreen == "settings" -> SettingsScreen()
                     currentSubScreen == "safety" -> SafetyCenterScreen()
                     currentSubScreen == "filters" -> FiltersScreen()
+                    currentSubScreen == "profile" -> UserProfileScreen(
+                        onSubScreenChange = { profileSubScreen = it },
+                        requestedSubScreen = profileSubScreen
+                    )
                     else -> {
                         when (selectedTab) {
                             HomeTab.Discovery -> DiscoveryScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                             HomeTab.Likes -> LikesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                             HomeTab.Matches -> MatchesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                             HomeTab.Message -> ChatListScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
-                            HomeTab.Profile -> UserProfileScreen(
-                                onSubScreenChange = { profileSubScreen = it },
-                                requestedSubScreen = profileSubScreen
+                            HomeTab.Chat -> AstrologyChatView(
+                                user = currentUserProfile,
+                                onChatClick = onChatClick,
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
                     }
@@ -374,6 +448,30 @@ enum class MatchFlowState { IDLE, WAITING_FOR_CITY, WAITING_FOR_AGE }
 
 @Composable
 fun AstrologyModal(user: User?, onChatClick: (String, String) -> Unit, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.8f)
+                .padding(16.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            AstrologyChatView(user = user, onChatClick = onChatClick, onDismiss = onDismiss)
+        }
+    }
+}
+
+@Composable
+fun AstrologyChatView(
+    user: User?,
+    onChatClick: (String, String) -> Unit,
+    onDismiss: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
     val repository = remember { FirebaseRepository() }
     var potentialMatches by remember { mutableStateOf<List<User>>(emptyList()) }
     
@@ -474,213 +572,201 @@ fun AstrologyModal(user: User?, onChatClick: (String, String) -> Unit, onDismiss
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    Column(
+        modifier = modifier
+            .padding(16.dp)
+            .fillMaxSize()
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.8f)
-                .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxSize()
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFFFF1493).copy(alpha = 0.1f),
+                    modifier = Modifier.size(40.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFFFF1493).copy(alpha = 0.1f),
-                            modifier = Modifier.size(40.dp)
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Color(0xFFFF1493),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "AI Astrologer",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Text(
+                        text = "Online • Celestial Guide",
+                        fontSize = 12.sp,
+                        color = Color.Green
+                    )
+                }
+            }
+            if (onDismiss != null) {
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                }
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.LightGray.copy(alpha = 0.5f))
+
+        // Suggestion Chips
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(suggestions) { suggestion ->
+                Surface(
+                    onClick = { sendMessage(suggestion) },
+                    color = Color(0xFFFF1493).copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, Color(0xFFFF1493).copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = suggestion,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        fontSize = 12.sp,
+                        color = Color(0xFFFF1493),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        // Chat Messages
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            state = scrollState,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
+            items(messages.size) { index ->
+                when (val message = messages[index]) {
+                    is AstrologyMessage.Text -> {
+                        val isUser = message.sender == "User"
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFF1493),
-                                    modifier = Modifier.size(24.dp)
+                            Surface(
+                                color = if (isUser) Color(0xFFFF1493) else Color(0xFFF0F0F0),
+                                shape = RoundedCornerShape(
+                                    topStart = 16.dp,
+                                    topEnd = 16.dp,
+                                    bottomStart = if (isUser) 16.dp else 0.dp,
+                                    bottomEnd = if (isUser) 0.dp else 16.dp
+                                ),
+                                modifier = Modifier.widthIn(max = 280.dp)
+                            ) {
+                                Text(
+                                    text = message.content,
+                                    modifier = Modifier.padding(12.dp),
+                                    color = if (isUser) Color.White else Color.Black,
+                                    fontSize = 14.sp
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "AI Astrologer",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Black
-                            )
-                            Text(
-                                text = "Online • Celestial Guide",
-                                fontSize = 12.sp,
-                                color = Color.Green
-                            )
-                        }
                     }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
-                    }
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.LightGray.copy(alpha = 0.5f))
-
-                // Suggestion Chips
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(suggestions) { suggestion ->
-                        Surface(
-                            onClick = { sendMessage(suggestion) },
-                            color = Color(0xFFFF1493).copy(alpha = 0.1f),
+                    is AstrologyMessage.ProfileMatch -> {
+                        val match = message.matchedUser
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                             shape = RoundedCornerShape(16.dp),
-                            border = BorderStroke(1.dp, Color(0xFFFF1493).copy(alpha = 0.3f))
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F8F8)),
+                            border = BorderStroke(1.dp, Color(0xFFFF1493).copy(alpha = 0.2f))
                         ) {
-                            Text(
-                                text = suggestion,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                fontSize = 12.sp,
-                                color = Color(0xFFFF1493),
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-
-                // Chat Messages
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    state = scrollState,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    items(messages.size) { index ->
-                        when (val message = messages[index]) {
-                            is AstrologyMessage.Text -> {
-                                val isUser = message.sender == "User"
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
-                                ) {
-                                    Surface(
-                                        color = if (isUser) Color(0xFFFF1493) else Color(0xFFF0F0F0),
-                                        shape = RoundedCornerShape(
-                                            topStart = 16.dp,
-                                            topEnd = 16.dp,
-                                            bottomStart = if (isUser) 16.dp else 0.dp,
-                                            bottomEnd = if (isUser) 0.dp else 16.dp
-                                        ),
-                                        modifier = Modifier.widthIn(max = 280.dp)
-                                    ) {
-                                        Text(
-                                            text = message.content,
-                                            modifier = Modifier.padding(12.dp),
-                                            color = if (isUser) Color.White else Color.Black,
-                                            fontSize = 14.sp
-                                        )
-                                    }
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AsyncImage(
+                                    model = if (match.profile_image.isNotEmpty()) match.profile_image else R.drawable.girl,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(60.dp).clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${match.first_name}, ${getAgeFromDob(match.dob)}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    )
+                                    Text(
+                                        text = match.city,
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
                                 }
-                            }
-                            is AstrologyMessage.ProfileMatch -> {
-                                val match = message.matchedUser
-                                Card(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F8F8)),
-                                    border = BorderStroke(1.dp, Color(0xFFFF1493).copy(alpha = 0.2f))
+                                IconButton(
+                                    onClick = { 
+                                        onChatClick(match.first_name, match.id)
+                                        onDismiss?.invoke()
+                                    },
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        containerColor = Color(0xFFFF1493),
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier.size(40.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        AsyncImage(
-                                            model = if (match.profile_image.isNotEmpty()) match.profile_image else R.drawable.girl,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(60.dp).clip(CircleShape),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "${match.first_name}, ${getAgeFromDob(match.dob)}",
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 16.sp
-                                            )
-                                            Text(
-                                                text = match.city,
-                                                fontSize = 12.sp,
-                                                color = Color.Gray
-                                            )
-                                        }
-                                        IconButton(
-                                            onClick = { 
-                                                onChatClick(match.first_name, match.id)
-                                                onDismiss()
-                                            },
-                                            colors = IconButtonDefaults.iconButtonColors(
-                                                containerColor = Color(0xFFFF1493),
-                                                contentColor = Color.White
-                                            ),
-                                            modifier = Modifier.size(40.dp)
-                                        ) {
-                                            Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", modifier = Modifier.size(20.dp))
-                                        }
-                                    }
+                                    Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", modifier = Modifier.size(20.dp))
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
 
-                // Input Area
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = inputText,
-                        onValueChange = { inputText = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Ask about your destiny...") },
-                        shape = RoundedCornerShape(24.dp),
-                        maxLines = 3,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFFF1493),
-                            unfocusedBorderColor = Color.LightGray
-                        )
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    FloatingActionButton(
-                        onClick = {
-                            if (inputText.isNotBlank()) {
-                                val userMsg = inputText
-                                inputText = ""
-                                sendMessage(userMsg)
-                            }
-                        },
-                        containerColor = Color(0xFFFF1493),
-                        contentColor = Color.White,
-                        shape = CircleShape,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
+        // Input Area
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = { inputText = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Ask about your destiny...") },
+                shape = RoundedCornerShape(24.dp),
+                maxLines = 3,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFFFF1493),
+                    unfocusedBorderColor = Color.LightGray
+                )
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            FloatingActionButton(
+                onClick = {
+                    if (inputText.isNotBlank()) {
+                        val userMsg = inputText
+                        inputText = ""
+                        sendMessage(userMsg)
                     }
-                }
+                },
+                containerColor = Color(0xFFFF1493),
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(Icons.Default.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -969,52 +1055,202 @@ fun MatchesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0
         isLoading = false
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        Text(
-            text = "Your Matches",
-            modifier = Modifier.padding(16.dp),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black
-        )
-
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { 
-                CircularProgressIndicator(color = Color(0xFFFF2D6C)) 
-            }
-        } else if (matches.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { 
-                Text("No matches yet", color = Color.Gray) 
-            }
-        } else {
-            LazyColumn {
-                items(matches) { user ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onChatClick(user.first_name, user.id) }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AsyncImage(
-                            model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp).clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "${user.first_name}, ${calculateAge(user.dob)}", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "You matched! Say hi 👋", fontSize = 14.sp, color = Color.Gray)
-                        }
-                        IconButton(onClick = { onChatClick(user.first_name, user.id) }) {
-                            Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", tint = Color(0xFFFF2D6C))
-                        }
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6))
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF5D1049))) {
+        // FRND Connect Header
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFFF007F))
+                .padding(vertical = 12.dp, horizontal = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "FRND Connect",
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Rooms",
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                //卡通形象占位
+                Row(verticalAlignment = Alignment.Bottom) {
+                    AsyncImage(
+                        model = R.drawable.girl,
+                        contentDescription = null,
+                        modifier = Modifier.size(50.dp).clip(CircleShape)
+                    )
+                    AsyncImage(
+                        model = R.drawable.ic_boy,
+                        contentDescription = null,
+                        modifier = Modifier.size(50.dp).clip(CircleShape).offset(x = (-10).dp)
+                    )
                 }
             }
         }
+
+        // Filter Chips Row
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            item {
+                Surface(
+                    color = Color.Red,
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Text(
+                        "LiveVideo",
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            items(listOf("#FRND-ship 🤝", "#love ❤️", "#Hot 🔥", "#New ✨")) { tag ->
+                Surface(
+                    color = Color.White,
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Text(
+                        tag,
+                        color = if(tag.contains("love")) Color.Red else Color.Black,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Main Area
+        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+            // Background Hearts
+            repeat(6) { i ->
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.08f),
+                    modifier = Modifier
+                        .size((120 + i * 40).dp)
+                        .offset(x = (i * 60 - 30).dp, y = (i * 120).dp)
+                )
+            }
+
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { 
+                    CircularProgressIndicator(color = Color.White) 
+                }
+            } else if (matches.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { 
+                    Text("No active rooms", color = Color.White, fontSize = 18.sp) 
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(32.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(matches) { user ->
+                        ConnectRoomItem(user = user) {
+                            onChatClick(user.first_name, user.id)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ConnectRoomItem(user: User, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            // Avatar with Gradient Border
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.sweepGradient(
+                            listOf(Color(0xFF00E676), Color(0xFF29B6F6), Color(0xFF00E676))
+                        )
+                    )
+                    .padding(3.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .padding(2.dp)
+                    .clip(CircleShape)
+            ) {
+                AsyncImage(
+                    model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            
+            // Video Icon
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .size(28.dp),
+                shape = CircleShape,
+                color = Color(0xFF00C853),
+                border = BorderStroke(2.dp, Color.White)
+            ) {
+                Icon(
+                    Icons.Default.VideoCall, 
+                    contentDescription = null, 
+                    tint = Color.White,
+                    modifier = Modifier.padding(4.dp)
+                )
+            }
+            
+            // Badge
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset(y = 10.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = Color.White,
+                border = BorderStroke(1.dp, Color.LightGray)
+            ) {
+                Text(
+                    text = "हिन्दी",
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(20.dp))
+        
+        Text(
+            text = user.first_name + " ✨",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -1117,22 +1353,18 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
         isLoading = false
     }
     
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFFF9FAFB))
-        ) {
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFFF2D6C)) }
-            } else if (currentIndex < profiles.size) {
-                val profile = profiles[currentIndex]
-                
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF9FAFB))) {
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFFF1493)) }
+        } else if (currentIndex < profiles.size) {
+            val profile = profiles[currentIndex]
+            
+            Column(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(1f).padding(16.dp)) {
                     Card(
                         modifier = Modifier.fillMaxSize(),
-                        shape = RoundedCornerShape(24.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        shape = RoundedCornerShape(32.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                     ) {
                         Box {
                             AsyncImage(
@@ -1141,16 +1373,47 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
+                            
+                            // Top Overlay
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    color = Color.Black.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 12.dp)
+                                    ) {
+                                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF4CAF50)))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Online", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                
+                                IconButton(
+                                    onClick = { },
+                                    modifier = Modifier.size(32.dp).background(Color.Black.copy(alpha = 0.2f), CircleShape)
+                                ) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White)
+                                }
+                            }
+
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .background(
                                         Brush.verticalGradient(
-                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
-                                            startY = 600f
+                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                                            startY = 500f
                                         )
                                     )
                             )
+                            
                             Column(
                                 modifier = Modifier
                                     .align(Alignment.BottomStart)
@@ -1158,52 +1421,90 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "${profile.first_name}, ${calculateAge(profile.dob)}",
+                                        text = "${profile.first_name}, ${getAge(profile.dob)}",
                                         color = Color.White,
-                                        fontSize = 28.sp,
+                                        fontSize = 32.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    if (profile.is_online) {
-                                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(Color.Green))
-                                    }
-                                }
-                                Text(
-                                    text = profile.bio.take(30) + if(profile.bio.length > 30) "..." else "",
-                                    color = Color.White.copy(alpha = 0.8f),
-                                    fontSize = 16.sp
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(14.dp))
-                                    Text(
-                                        text = "${profile.city} • 2km away",
-                                        color = Color.White.copy(alpha = 0.8f),
-                                        fontSize = 14.sp
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = "Verified",
+                                        tint = Color(0xFFFF1493),
+                                        modifier = Modifier.size(24.dp)
                                     )
+                                }
+                                
+                                Text(
+                                    text = profile.bio.take(100) + if(profile.bio.length > 100) "..." else "",
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 15.sp,
+                                    lineHeight = 20.sp,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
+                                    Surface(
+                                        color = Color.White.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(20.dp),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                        ) {
+                                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "${profile.city} • 2km away",
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                    
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        InterestChip("Travel ✈️")
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        InterestChip("Music 🎵")
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        InterestChip("Photography 📷")
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                // Swipe Actions
+                // Precise Swipe Actions matching requested UI
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 24.dp, start = 24.dp, end = 24.dp),
+                        .padding(bottom = 36.dp, start = 8.dp, end = 8.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ActionCircleButton(Icons.Default.Refresh, Color(0xFFFBBF24), 56.dp) { /* Rewind */ }
-                    ActionCircleButton(Icons.Default.Close, Color(0xFFEF4444), 72.dp) { 
+                    // Rewind - Yellow
+                    ActionCircleButton(Icons.Default.Refresh, Color(0xFFFFB300), 50.dp) { /* Rewind */ }
+                    
+                    // Dislike - Red
+                    ActionCircleButton(Icons.Default.Close, Color(0xFFF44336), 62.dp) { 
                         scope.launch { currentUser?.let { repository.dislikeProfile(it.uid, profile.id) } }
                         currentIndex++ 
                     }
-                    ActionCircleButton(Icons.Default.Favorite, Color(0xFFFF2D6C), 72.dp) { 
+                    
+                    // Like - Pink Background, White Icon (Largest)
+                    ActionCircleButton(Icons.Default.Favorite, Color.White, 82.dp, containerColor = Color(0xFFFF2D6C)) { 
                         scope.launch { 
                             if (currentUser != null) {
                                 repository.likeProfile(currentUser.uid, profile.id)
-                                // Check if they already liked us -> Match!
                                 val theyLikedMeSnapshot = repository.getLikedByUsers(currentUser.uid).getOrDefault(emptyList())
                                 if (theyLikedMeSnapshot.any { it.id == profile.id }) {
                                     matchedUser = profile
@@ -1213,14 +1514,19 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
                             }
                         }
                     }
-                    ActionCircleButton(Icons.Default.Star, Color(0xFF22D3EE), 56.dp) { /* Super Like */ }
+                    
+                    // Super Like - Cyan
+                    ActionCircleButton(Icons.Default.Star, Color(0xFF29B6F6), 62.dp) { /* Super Like */ }
+                    
+                    // Boost/Sparkles - Pink Background, White Icon
+                    ActionCircleButton(Icons.Default.AutoAwesome, Color.White, 50.dp, containerColor = Color(0xFFFF2D6C)) { /* Boost */ }
                 }
-            } else {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("No more profiles", color = Color.Gray, fontSize = 18.sp)
-                        TextButton(onClick = { refreshTrigger }) { Text("Refresh", color = Color(0xFFFF2D6C)) }
-                    }
+            }
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No more profiles", color = Color.Gray, fontSize = 18.sp)
+                    TextButton(onClick = { refreshTrigger }) { Text("Refresh", color = Color(0xFFFF2D6C)) }
                 }
             }
         }
@@ -1244,17 +1550,71 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
 }
 
 @Composable
-fun ActionCircleButton(icon: ImageVector, tint: Color, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+fun InterestChip(text: String) {
     Surface(
-        modifier = Modifier.size(size),
-        shape = CircleShape,
-        color = Color.White,
-        shadowElevation = 4.dp,
-        onClick = onClick
+        color = Color.Black.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size * 0.5f))
-        }
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+fun ActionCircleButton(
+    icon: ImageVector,
+    tint: Color,
+    size: androidx.compose.ui.unit.Dp,
+    containerColor: Color = Color.White,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = spring(dampingRatio = 0.4f, stiffness = 400f),
+        label = "scale"
+    )
+
+    val shadowColor = if (containerColor == Color.White) Color.Black.copy(alpha = 0.15f) else containerColor.copy(alpha = 0.4f)
+
+    Box(
+        modifier = Modifier
+            .size(size)
+            .scale(scale)
+            .shadow(
+                elevation = if (isPressed) 4.dp else 10.dp,
+                shape = CircleShape,
+                clip = false,
+                ambientColor = shadowColor,
+                spotColor = shadowColor
+            )
+            .background(containerColor, CircleShape)
+            .then(
+                if (containerColor == Color.White) 
+                    Modifier.border(0.5.dp, Color.LightGray.copy(alpha = 0.2f), CircleShape)
+                else Modifier
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(size * 0.48f)
+        )
     }
 }
 

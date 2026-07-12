@@ -53,6 +53,15 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.lazy.itemsIndexed
 import kotlin.math.roundToInt
 import com.datingapp.R
 import com.example.dating_app.model.User
@@ -121,8 +130,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
     var currentUserProfile by remember { mutableStateOf<User?>(null) }
     var incomingCall by remember { mutableStateOf<Call?>(null) }
     var showAstrologyModal by remember { mutableStateOf(false) }
+    var unreadMessageCount by remember { mutableIntStateOf(0) }
+    var lastReceivedMessage by remember { mutableStateOf<Message?>(null) }
+    var showNotificationBanner by remember { mutableStateOf(false) }
 
-    // Fetch Current User Data
+    // Fetch Current User Data & Observe Unread Count
     LaunchedEffect(Unit) {
         auth.currentUser?.uid?.let { uid ->
             repository.getUser(uid).onSuccess { user ->
@@ -131,27 +143,45 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                     (context.applicationContext as MyApplication).initZegoService(uid, "${user.first_name} ${user.last_name}")
                 }
             }
+            
+            // Real-time Unread Count Observation
+            repository.observeUnreadMessageCount(uid).collectLatest { count ->
+                unreadMessageCount = count
+            }
         }
     }
 
-    // Observe Incoming Calls
+    // Observe Incoming Messages for Notification Banner
     LaunchedEffect(Unit) {
         auth.currentUser?.uid?.let { uid ->
-            repository.observeIncomingCalls(uid).collectLatest { calls ->
-                incomingCall = calls.firstOrNull()
+            repository.observeLastReceivedMessage(uid).collectLatest { message ->
+                // Only show banner for messages received while the app is open (recent timestamp)
+                if (message != null && message.timestamp > System.currentTimeMillis() - 5000) {
+                    lastReceivedMessage = message
+                    showNotificationBanner = true
+                    refreshTrigger++ // Force list refresh
+                    delay(3000)
+                    showNotificationBanner = false
+                }
             }
         }
     }
 
-    // Heartbeat: Update online status periodically
-    LaunchedEffect(Unit) {
-        val uid = auth.currentUser?.uid
-        if (uid != null) {
-            while (true) {
-                repository.updateProfile(uid, mapOf("is_online" to true, "last_seen" to System.currentTimeMillis()))
-                delay(60000) // Update every minute
+    // Real-time Online Status Observer for Self
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            val uid = auth.currentUser?.uid ?: return@LifecycleEventObserver
+            scope.launch {
+                when (event) {
+                    Lifecycle.Event.ON_START -> repository.updateProfile(uid, mapOf("is_online" to true, "last_seen" to System.currentTimeMillis()))
+                    Lifecycle.Event.ON_STOP -> repository.updateProfile(uid, mapOf("is_online" to false, "last_seen" to System.currentTimeMillis()))
+                    else -> {}
+                }
             }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val topBarTitle = when {
@@ -287,12 +317,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                 Icon(Icons.Default.Tune, contentDescription = "Filters", tint = Color.Gray)
                             }
                             IconButton(onClick = { }) { 
-                                BadgedBox(
-                                    badge = { Badge(containerColor = Color.Red) { Text("3") } },
-                                    modifier = Modifier.padding(end = 8.dp)
-                                ) {
-                                    Icon(Icons.Default.NotificationsNone, contentDescription = "Notifications", tint = Color.Gray)
-                                }
+                                Icon(Icons.Default.NotificationsNone, contentDescription = "Notifications", tint = Color.Gray)
                             }
                             // Added Profile Icon on the right side
                             IconButton(
@@ -379,9 +404,13 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                         HomeTab.Likes -> Icon(Icons.Default.FavoriteBorder, contentDescription = null, modifier = iconModifier)
                                         HomeTab.Matches -> Icon(painter = painterResource(id = R.drawable.ic_hearts), contentDescription = null, modifier = iconModifier)
                                         HomeTab.Message -> {
-                                            BadgedBox(
-                                                badge = { Badge(containerColor = Color(0xFFFF1493)) { Text("3", color = Color.White) } }
-                                            ) {
+                                            if (unreadMessageCount > 0) {
+                                                BadgedBox(
+                                                    badge = { Badge(containerColor = Color(0xFFFF1493)) { Text(unreadMessageCount.toString(), color = Color.White) } }
+                                                ) {
+                                                    Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, modifier = iconModifier)
+                                                }
+                                            } else {
                                                 Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, modifier = iconModifier)
                                             }
                                         }
@@ -402,38 +431,101 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                 }
             }
         ) { padding ->
-            Box(modifier = Modifier.padding(padding)) {
-                when {
-                    currentSubScreen == "blocked" -> BlockedListScreen()
-                    currentSubScreen == "settings" -> SettingsScreen()
-                    currentSubScreen == "safety" -> SafetyCenterScreen()
-                    currentSubScreen == "filters" -> FiltersScreen()
-                    currentSubScreen == "profile" -> UserProfileScreen(
-                        onSubScreenChange = { profileSubScreen = it },
-                        requestedSubScreen = profileSubScreen
-                    )
-                    else -> {
-                        when (selectedTab) {
-                            HomeTab.Discovery -> DiscoveryScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
-                            HomeTab.Likes -> LikesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
-                            HomeTab.Matches -> MatchesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
-                            HomeTab.Message -> ChatListScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
-                            HomeTab.Chat -> AstrologyChatView(
-                                user = currentUserProfile,
-                                onChatClick = onChatClick,
-                                modifier = Modifier.fillMaxSize()
-                            )
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.padding(padding)) {
+                    when {
+                        currentSubScreen == "blocked" -> BlockedListScreen()
+                        currentSubScreen == "settings" -> SettingsScreen()
+                        currentSubScreen == "safety" -> SafetyCenterScreen()
+                        currentSubScreen == "filters" -> FiltersScreen()
+                        currentSubScreen == "profile" -> UserProfileScreen(
+                            onSubScreenChange = { profileSubScreen = it },
+                            requestedSubScreen = profileSubScreen
+                        )
+                        else -> {
+                            when (selectedTab) {
+                                HomeTab.Discovery -> DiscoveryScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
+                                HomeTab.Likes -> LikesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
+                                HomeTab.Matches -> MatchesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
+                                HomeTab.Message -> ChatListScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
+                                HomeTab.Chat -> AstrologyChatView(
+                                    user = currentUserProfile,
+                                    onChatClick = onChatClick,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            if (showAstrologyModal) {
-                AstrologyModal(
-                    user = currentUserProfile,
-                    onChatClick = onChatClick,
-                    onDismiss = { showAstrologyModal = false }
-                )
+                if (showAstrologyModal) {
+                    AstrologyModal(
+                        user = currentUserProfile,
+                        onChatClick = onChatClick,
+                        onDismiss = { showAstrologyModal = false }
+                    )
+                }
+
+                // Notification Banner (Floats above everything)
+                AnimatedVisibility(
+                    visible = showNotificationBanner,
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                selectedTab = HomeTab.Message
+                                showNotificationBanner = false
+                            },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFFF1493).copy(0.1f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Chat,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF1493),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("New Message", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                val bannerText = remember(lastReceivedMessage) {
+                                    val msg = lastReceivedMessage
+                                    if (msg == null) ""
+                                    else if (msg.messageType != MessageType.TEXT) msg.messageType
+                                    else if (msg.encrypted) {
+                                        val key = SecurityUtils.generateChatKey(auth.currentUser?.uid ?: "", msg.senderId)
+                                        SecurityUtils.decrypt(msg.messageText, key)
+                                    } else msg.messageText
+                                }
+                                Text(
+                                    bannerText,
+                                    fontSize = 12.sp,
+                                    color = Color.Gray,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1044,6 +1136,7 @@ fun MatchesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0
     val currentUser = FirebaseAuth.getInstance().currentUser
     var matches by remember { mutableStateOf<List<User>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    val scrollState = rememberLazyListState()
 
     LaunchedEffect(refreshTrigger) {
         if (currentUser != null) {
@@ -1055,98 +1148,22 @@ fun MatchesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0
         isLoading = false
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF5D1049))) {
-        // FRND Connect Header
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFFF007F))
-                .padding(vertical = 12.dp, horizontal = 16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "FRND Connect",
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "Rooms",
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Center
-                    )
-                }
-                //卡通形象占位
-                Row(verticalAlignment = Alignment.Bottom) {
-                    AsyncImage(
-                        model = R.drawable.girl,
-                        contentDescription = null,
-                        modifier = Modifier.size(50.dp).clip(CircleShape)
-                    )
-                    AsyncImage(
-                        model = R.drawable.ic_boy,
-                        contentDescription = null,
-                        modifier = Modifier.size(50.dp).clip(CircleShape).offset(x = (-10).dp)
-                    )
-                }
-            }
-        }
-
-        // Filter Chips Row
-        LazyRow(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            item {
-                Surface(
-                    color = Color.Red,
-                    shape = RoundedCornerShape(24.dp)
-                ) {
-                    Text(
-                        "LiveVideo",
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            items(listOf("#FRND-ship 🤝", "#love ❤️", "#Hot 🔥", "#New ✨")) { tag ->
-                Surface(
-                    color = Color.White,
-                    shape = RoundedCornerShape(24.dp)
-                ) {
-                    Text(
-                        tag,
-                        color = if(tag.contains("love")) Color.Red else Color.Black,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-
-        // Main Area
-        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
-            // Background Hearts
-            repeat(6) { i ->
-                Icon(
-                    imageVector = Icons.Default.Favorite,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.08f),
-                    modifier = Modifier
-                        .size((120 + i * 40).dp)
-                        .offset(x = (i * 60 - 30).dp, y = (i * 120).dp)
+    // Automatic Continuous Scrolling (Right to Left)
+    LaunchedEffect(matches) {
+        if (matches.isNotEmpty()) {
+            while (true) {
+                scrollState.animateScrollBy(
+                    value = 150f, 
+                    animationSpec = tween(durationMillis = 3000, easing = LinearEasing)
                 )
             }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF5D1049))) {
+        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+            // Animated Floating Background Hearts (Zig-Zag motion)
+            FloatingHeartsBackground()
 
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { 
@@ -1157,29 +1174,50 @@ fun MatchesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0
                     Text("No active rooms", color = Color.White, fontSize = 18.sp) 
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(32.dp),
-                    modifier = Modifier.fillMaxSize()
+                // Horizontal Staggered List (Zig-Zag)
+                LazyRow(
+                    state = scrollState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 32.dp, vertical = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(40.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(matches) { user ->
-                        ConnectRoomItem(user = user) {
+                    itemsIndexed(matches) { index, user ->
+                        // Alternate positions for Zig-Zag
+                        val yOffset = if (index % 2 == 0) (-100).dp else 100.dp
+                        
+                        ConnectRoomItem(
+                            user = user,
+                            modifier = Modifier.offset(y = yOffset)
+                        ) {
                             onChatClick(user.first_name, user.id)
                         }
                     }
                 }
+            }
+            
+            // Sparkles FAB
+            FloatingActionButton(
+                onClick = { },
+                containerColor = Color(0xFFFF007F),
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
+                    .size(64.dp)
+            ) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(32.dp))
             }
         }
     }
 }
 
 @Composable
-fun ConnectRoomItem(user: User, onClick: () -> Unit) {
+fun ConnectRoomItem(user: User, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
+        modifier = modifier.clickable(onClick = onClick)
     ) {
         Box(contentAlignment = Alignment.Center) {
             // Avatar with Gradient Border
@@ -1233,7 +1271,7 @@ fun ConnectRoomItem(user: User, onClick: () -> Unit) {
                 border = BorderStroke(1.dp, Color.LightGray)
             ) {
                 Text(
-                    text = "हिन्दी",
+                    text = if (user.language.isNotBlank()) user.language else "English",
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -1251,6 +1289,80 @@ fun ConnectRoomItem(user: User, onClick: () -> Unit) {
             fontSize = 15.sp,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+fun FloatingHeartsBackground() {
+    val infiniteTransition = rememberInfiniteTransition(label = "hearts")
+    
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        repeat(15) { i ->
+            val xSeed = (i * 73) % 100 / 100f
+            val duration = 6000 + (i * 400) % 4000
+            val delay = (i * 900) % 6000
+            
+            val alpha by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 0f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = duration
+                        delayMillis = delay
+                        0f at 0
+                        0.4f at duration / 2
+                        0f at duration
+                    },
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "alpha"
+            )
+            
+            val scale by infiniteTransition.animateFloat(
+                initialValue = 0.5f,
+                targetValue = 1.2f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(duration, delay, LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "scale"
+            )
+            
+            // Zig-Zag (Wavy) vertical movement
+            val yProgress by infiniteTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = -0.2f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(duration, delay, LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "yProgress"
+            )
+
+            // Horizontal Zig-Zag (Sway)
+            val xSway by infiniteTransition.animateFloat(
+                initialValue = -20f,
+                targetValue = 20f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(duration / 4, 0, LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "xSway"
+            )
+
+            val xPos = maxWidth * xSeed + xSway.dp
+            val yPos = maxHeight * yProgress
+            
+            Icon(
+                imageVector = Icons.Default.Favorite,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = alpha),
+                modifier = Modifier
+                    .offset(x = xPos, y = yPos)
+                    .scale(scale)
+                    .size(24.dp)
+            )
+        }
     }
 }
 

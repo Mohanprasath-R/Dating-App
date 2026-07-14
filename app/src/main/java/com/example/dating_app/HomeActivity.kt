@@ -13,7 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -294,11 +295,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
             topBar = {
                 // Hide main top bar for profile screen as it has its own immersive header
                 if (currentSubScreen != "profile") {
-                    TopAppBar(
+                    CenterAlignedTopAppBar(
                         title = { 
                             Text(
                                 text = topBarTitle, 
-                                color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 24.sp
+                                color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 20.sp
                             ) 
                         },
                         navigationIcon = {
@@ -311,7 +312,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                     scope.launch { drawerState.open() } 
                                 }
                             }) {
-                                Icon(imageVector = if (isSubScreen) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu, contentDescription = "Navigation")
+                                Icon(
+                                    imageVector = if (isSubScreen) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu, 
+                                    contentDescription = "Navigation",
+                                    tint = if (isSubScreen) Color.Black else Color(0xFFFF1493)
+                                )
                             }
                         },
                         actions = {
@@ -350,7 +355,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                 }
                             }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.White)
                     )
                 }
             },
@@ -1988,23 +1993,56 @@ fun ActionCircleButton(
 @Composable
 fun SettingsScreen() {
     val items = listOf(
-        "Account" to Icons.Default.Person,
-        "Privacy" to Icons.Default.Lock,
-        "Notifications" to Icons.Default.Notifications,
-        "Subscription" to Icons.Default.Star,
-        "Help & Support" to Icons.Default.Help,
-        "About" to Icons.Default.Info
+        Triple("Account", "Edit your profile and preferences", Icons.Outlined.Person),
+        Triple("Privacy", "Manage your privacy settings", Icons.Outlined.Lock),
+        Triple("Notifications", "Manage your notifications", Icons.Outlined.Notifications),
+        Triple("Subscription", "Manage your subscription", Icons.Outlined.CardMembership),
+        Triple("Help & Support", "Get help and support", Icons.Outlined.HelpOutline),
+        Triple("About", "App version 1.0.0", Icons.Outlined.Info)
     )
 
     LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        items(items) { (title, icon) ->
+        items(items) { (title, subtitle, icon) ->
             ListItem(
-                headlineContent = { Text(title) },
-                leadingContent = { Icon(icon, contentDescription = null, tint = Color.Gray) },
-                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
-                modifier = Modifier.clickable { }
+                headlineContent = { 
+                    Text(
+                        text = title, 
+                        fontWeight = FontWeight.Bold, 
+                        fontSize = 16.sp,
+                        color = Color.Black
+                    ) 
+                },
+                supportingContent = { 
+                    Text(
+                        text = subtitle, 
+                        fontSize = 13.sp, 
+                        color = Color.Gray
+                    ) 
+                },
+                leadingContent = { 
+                    Icon(
+                        imageVector = icon, 
+                        contentDescription = null, 
+                        tint = Color.Black.copy(alpha = 0.8f),
+                        modifier = Modifier.size(24.dp)
+                    ) 
+                },
+                trailingContent = { 
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight, 
+                        contentDescription = null,
+                        tint = Color.LightGray,
+                        modifier = Modifier.size(20.dp)
+                    ) 
+                },
+                modifier = Modifier.clickable { },
+                colors = ListItemDefaults.colors(containerColor = Color.White)
             )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6))
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp), 
+                thickness = 0.5.dp, 
+                color = Color.LightGray.copy(alpha = 0.3f)
+            )
         }
     }
 }

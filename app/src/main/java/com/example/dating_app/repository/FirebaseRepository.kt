@@ -424,15 +424,17 @@ class FirebaseRepository {
 
     suspend fun getChatList(currentUserId: String): Result<List<ChatListItem>> {
         return try {
-            // Fetch blocked users first to filter the chat list
             val blockedSnapshot = firestore.collection("blocked_users")
                 .whereEqualTo("blockerId", currentUserId)
                 .get()
                 .await()
             val blockedIds = blockedSnapshot.documents.mapNotNull { it.getString("blockedId") }.toSet()
 
-            val sentSnapshot = messagesCollection.whereEqualTo("senderId", currentUserId).get().await()
-            val receivedSnapshot = messagesCollection.whereEqualTo("receiverId", currentUserId).get().await()
+            // Fetch from server to avoid stale cache
+            val sentSnapshot = messagesCollection.whereEqualTo("senderId", currentUserId)
+                .get(com.google.firebase.firestore.Source.SERVER).await()
+            val receivedSnapshot = messagesCollection.whereEqualTo("receiverId", currentUserId)
+                .get(com.google.firebase.firestore.Source.SERVER).await()
             
             val allMessages = (sentSnapshot.toObjects(Message::class.java) + 
                               receivedSnapshot.toObjects(Message::class.java))
@@ -440,7 +442,7 @@ class FirebaseRepository {
             
             val chatPartners = allMessages.map { 
                 if (it.senderId == currentUserId) it.receiverId else it.senderId 
-            }.distinct().filter { it !in blockedIds } // Filter out blocked users
+            }.distinct().filter { it !in blockedIds }
             
             val resultList = mutableListOf<ChatListItem>()
             for (partnerId in chatPartners) {
@@ -649,9 +651,27 @@ class FirebaseRepository {
                 .get()
                 .await()
 
+            if (unreadMessages.isEmpty) return Result.success(Unit)
+
             val batch = firestore.batch()
             for (doc in unreadMessages.documents) {
                 batch.update(doc.reference, "isRead", true)
+            }
+            batch.commit().await()
+            android.util.Log.d("FirebaseRepository", "Marked ${unreadMessages.size()} messages as read for $currentUserId")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            android.util.Log.e("FirebaseRepository", "Error marking messages as read: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun markMessagesAsReadByIds(messageIds: List<String>): Result<Unit> {
+        if (messageIds.isEmpty()) return Result.success(Unit)
+        return try {
+            val batch = firestore.batch()
+            for (id in messageIds) {
+                batch.update(messagesCollection.document(id), "isRead", true)
             }
             batch.commit().await()
             Result.success(Unit)

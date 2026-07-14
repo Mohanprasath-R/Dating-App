@@ -30,9 +30,11 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.datingapp.R
 import com.example.dating_app.model.Message
+import com.example.dating_app.model.MessageType
 import com.example.dating_app.model.User
 import com.example.dating_app.repository.ChatListItem
 import com.example.dating_app.repository.FirebaseRepository
+import com.example.dating_app.util.SecurityUtils
 import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
 import java.util.*
@@ -163,7 +165,7 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Chat List
-        if (isLoading) {
+        if (isLoading && chats.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Color(0xFFFF1493))
             }
@@ -240,6 +242,29 @@ fun ModernChatItem(chatItem: ChatListItem, onChatClick: (String, String) -> Unit
     val partner = chatItem.partner
     val lastMessage = chatItem.lastMessage
     val unreadCount = chatItem.unreadCount
+    val currentUser = remember { FirebaseAuth.getInstance().currentUser }
+
+    val displayMessage = remember(lastMessage, currentUser?.uid) {
+        if (lastMessage == null) return@remember "Start chatting..."
+        
+        val content = if (lastMessage.encrypted && currentUser != null) {
+            try {
+                val key = SecurityUtils.generateChatKey(currentUser.uid, partner.id)
+                SecurityUtils.decrypt(lastMessage.messageText, key)
+            } catch (e: Exception) {
+                lastMessage.messageText
+            }
+        } else {
+            lastMessage.messageText
+        }
+        
+        when (lastMessage.messageType) {
+            MessageType.IMAGE -> "📷 Image"
+            MessageType.VIDEO -> "🎥 Video"
+            MessageType.AUDIO -> "🎤 Voice Note"
+            else -> content
+        }
+    }
 
     val time = lastMessage?.let { 
         val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -299,7 +324,7 @@ fun ModernChatItem(chatItem: ChatListItem, onChatClick: (String, String) -> Unit
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = lastMessage?.messageText ?: "Start chatting...",
+                        text = displayMessage,
                         fontSize = 13.sp,
                         color = if (unreadCount > 0) Color.Black else Color.Gray,
                         fontWeight = if (unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal,

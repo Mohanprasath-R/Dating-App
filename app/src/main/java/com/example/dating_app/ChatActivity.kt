@@ -148,9 +148,19 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
             repository.getMessages(currentUser.uid, receiverId).collectLatest { updatedMessages ->
                 messages.clear()
                 messages.addAll(updatedMessages)
-                
-                // Mark messages as read when they are received in the active chat
-                repository.markMessagesAsRead(currentUser.uid, receiverId)
+            }
+        }
+    }
+
+    // Mark messages as read when seen
+    LaunchedEffect(messages.toList()) {
+        if (currentUser != null && receiverId.isNotEmpty()) {
+            val unreadIds = messages.filter { 
+                it.receiverId == currentUser.uid && !it.isRead 
+            }.map { it.id }
+            
+            if (unreadIds.isNotEmpty()) {
+                repository.markMessagesAsReadByIds(unreadIds)
             }
         }
     }

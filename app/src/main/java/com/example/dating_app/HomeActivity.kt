@@ -156,6 +156,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
             // Real-time Unread Count Observation
             repository.observeUnreadMessageCount(uid).collectLatest { count ->
                 unreadMessageCount = count
+                refreshTrigger++ // Refresh list when unread status changes anywhere
             }
         }
     }
@@ -176,7 +177,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
         }
     }
 
-    // Real-time Online Status Observer for Self
+    // Real-time Online Status Observer for Self & Refresh Trigger
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -185,6 +186,9 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                 when (event) {
                     Lifecycle.Event.ON_START -> repository.updateProfile(uid, mapOf("is_online" to true, "last_seen" to System.currentTimeMillis()))
                     Lifecycle.Event.ON_STOP -> repository.updateProfile(uid, mapOf("is_online" to false, "last_seen" to System.currentTimeMillis()))
+                    Lifecycle.Event.ON_RESUME -> {
+                        refreshTrigger++ // Refresh data when returning to home
+                    }
                     else -> {}
                 }
             }

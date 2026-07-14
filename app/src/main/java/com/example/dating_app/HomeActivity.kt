@@ -40,6 +40,11 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -1601,59 +1606,198 @@ fun MatchOverlay(matchedUser: User, onSendMessage: () -> Unit, onKeepSwiping: ()
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.9f)),
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF0F0C29), Color(0xFF1E1E1E), Color(0xFF0F0C29))
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Decorative background elements (Confetti simulation)
+        Box(modifier = Modifier.fillMaxSize()) {
+            val dotColors = listOf(Color(0xFFFF2D6C), Color.White, Color(0xFFFFC0CB))
+            listOf(
+                Offset(50f, 100f), Offset(300f, 150f), Offset(100f, 400f),
+                Offset(350f, 500f), Offset(50f, 700f), Offset(300f, 800f)
+            ).forEachIndexed { index, offset ->
+                Box(
+                    modifier = Modifier
+                        .offset(offset.x.dp, offset.y.dp)
+                        .size(4.dp)
+                        .clip(CircleShape)
+                        .background(dotColors[index % dotColors.size].copy(alpha = 0.4f))
+                )
+            }
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        ) {
+            // Glowing Hearts Illustration
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.height(160.dp)) {
+                // Background Glow
+                Box(
+                    modifier = Modifier
+                        .size(140.dp)
+                        .background(Color(0xFFFF2D6C).copy(alpha = 0.1f), CircleShape)
+                )
+                
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Icon(
+                        imageVector = Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = Color(0xFFFF2D6C),
+                        modifier = Modifier.size(90.dp).graphicsLayer { rotationZ = -15f }
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = Color(0xFFFF2D6C),
+                        modifier = Modifier.size(110.dp).graphicsLayer { rotationZ = 15f; translationX = -25f; translationY = -15f }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // It's a Match! Title
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "It's a Match!",
+                    color = Color.White,
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Cursive
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = null,
+                    tint = Color(0xFFFF2D6C),
+                    modifier = Modifier.size(24.dp).offset(y = 10.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Description with highlighted name
             Text(
-                text = "It's a Match!",
-                color = Color.White,
-                fontSize = 42.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Cursive
+                text = buildAnnotatedString {
+                    append("You and ")
+                    withStyle(style = SpanStyle(color = Color(0xFFFF2D6C), fontWeight = FontWeight.Bold)) {
+                        append(matchedUser.first_name)
+                    }
+                    append(" liked each other")
+                },
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 18.sp,
+                textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "You and ${matchedUser.first_name} liked each other",
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 16.sp
-            )
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            // Profile Images with Borders
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Surface(
+                    modifier = Modifier.size(110.dp),
+                    shape = CircleShape,
+                    border = BorderStroke(2.dp, Color(0xFFFF2D6C)),
+                    color = Color.Transparent
+                ) {
+                    AsyncImage(
+                        model = R.drawable.ic_boy, // currentUser placeholder
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.padding(4.dp).clip(CircleShape)
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = null,
+                    tint = Color(0xFFFF2D6C),
+                    modifier = Modifier.size(32.dp).padding(horizontal = 12.dp)
+                )
+
+                Surface(
+                    modifier = Modifier.size(110.dp),
+                    shape = CircleShape,
+                    border = BorderStroke(2.dp, Color(0xFFFF2D6C)),
+                    color = Color.Transparent
+                ) {
+                    AsyncImage(
+                        model = if (matchedUser.profile_image.isNotEmpty()) matchedUser.profile_image else R.drawable.girl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.padding(4.dp).clip(CircleShape)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(64.dp))
+
+            // Send a Message Button (Gradient)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+                    .clip(RoundedCornerShape(30.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(Color(0xFFFA2E69), Color(0xFFC71585))
+                        )
+                    )
+                    .clickable { onSendMessage() },
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Send a Message",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Keep Swiping Button (Outline)
+            OutlinedButton(
+                onClick = onKeepSwiping,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp),
+                shape = RoundedCornerShape(30.dp),
+                border = BorderStroke(2.dp, Color(0xFFFF2D6C)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+            ) {
+                Text(
+                    text = "Keep Swiping",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
             
             Spacer(modifier = Modifier.height(48.dp))
             
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(
-                    model = R.drawable.ic_boy, // currentUser (placeholder)
-                    contentDescription = null,
-                    modifier = Modifier.size(100.dp).clip(CircleShape).border(2.dp, Color.White, CircleShape)
-                )
-                Icon(Icons.Default.Favorite, contentDescription = null, tint = Color(0xFFFF2D6C), modifier = Modifier.size(40.dp).padding(horizontal = 8.dp))
-                AsyncImage(
-                    model = if(matchedUser.profile_image.isNotEmpty()) matchedUser.profile_image else R.drawable.girl,
-                    contentDescription = null,
-                    modifier = Modifier.size(100.dp).clip(CircleShape).border(2.dp, Color.White, CircleShape)
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(64.dp))
-            
-            Button(
-                onClick = onSendMessage,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp).height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF2D6C))
-            ) {
-                Text("Send a Message", fontWeight = FontWeight.Bold)
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            OutlinedButton(
-                onClick = onKeepSwiping,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp).height(56.dp),
-                border = BorderStroke(1.dp, Color.White),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-            ) {
-                Text("Keep Swiping")
+            // Pager-like indicator at the very bottom
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.Gray))
+                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFFF2D6C)))
+                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.Gray))
             }
         }
     }

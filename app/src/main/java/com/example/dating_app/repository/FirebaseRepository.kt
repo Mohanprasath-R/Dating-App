@@ -19,6 +19,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
+data class ChatListItem(
+    val partner: User,
+    val lastMessage: Message?,
+    val unreadCount: Int
+)
+
 class FirebaseRepository {
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
@@ -416,7 +422,7 @@ class FirebaseRepository {
         awaitClose { subscription.remove() }
     }
 
-    suspend fun getChatList(currentUserId: String): Result<List<Pair<User, Message?>>> {
+    suspend fun getChatList(currentUserId: String): Result<List<ChatListItem>> {
         return try {
             // Fetch blocked users first to filter the chat list
             val blockedSnapshot = firestore.collection("blocked_users")
@@ -436,15 +442,17 @@ class FirebaseRepository {
                 if (it.senderId == currentUserId) it.receiverId else it.senderId 
             }.distinct().filter { it !in blockedIds } // Filter out blocked users
             
-            val resultList = mutableListOf<Pair<User, Message?>>()
+            val resultList = mutableListOf<ChatListItem>()
             for (partnerId in chatPartners) {
                 val partnerResult = getUser(partnerId)
                 partnerResult.onSuccess { partner ->
                     if (partner != null) {
-                        val lastMessage = allMessages.firstOrNull { 
+                        val partnerMessages = allMessages.filter { 
                             it.senderId == partnerId || it.receiverId == partnerId 
                         }
-                        resultList.add(partner to lastMessage)
+                        val lastMessage = partnerMessages.firstOrNull()
+                        val unreadCount = partnerMessages.count { it.receiverId == currentUserId && !it.isRead }
+                        resultList.add(ChatListItem(partner, lastMessage, unreadCount))
                     }
                 }
             }

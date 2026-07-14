@@ -13,7 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -24,7 +24,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -68,7 +67,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.itemsIndexed
 import kotlin.math.roundToInt
 import com.datingapp.R
@@ -296,11 +294,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
             topBar = {
                 // Hide main top bar for profile screen as it has its own immersive header
                 if (currentSubScreen != "profile") {
-                    CenterAlignedTopAppBar(
+                    TopAppBar(
                         title = { 
                             Text(
                                 text = topBarTitle, 
-                                color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 20.sp
+                                color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 24.sp
                             ) 
                         },
                         navigationIcon = {
@@ -313,11 +311,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                     scope.launch { drawerState.open() } 
                                 }
                             }) {
-                                Icon(
-                                    imageVector = if (isSubScreen) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu, 
-                                    contentDescription = "Navigation",
-                                    tint = if (isSubScreen) Color.Black else Color(0xFFFF1493)
-                                )
+                                Icon(imageVector = if (isSubScreen) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Menu, contentDescription = "Navigation")
                             }
                         },
                         actions = {
@@ -356,7 +350,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                 }
                             }
                         },
-                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.White)
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
                     )
                 }
             },
@@ -441,7 +435,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                 HomeTab.Discovery -> DiscoveryScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                                 HomeTab.Likes -> LikesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                                 HomeTab.Matches -> MatchesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
-                                HomeTab.Message -> ChatListScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
+                                HomeTab.Message -> ModernChatListScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                                 HomeTab.Chat -> AstrologyChatView(
                                     user = currentUserProfile,
                                     onChatClick = onChatClick,
@@ -550,7 +544,6 @@ fun AstrologyModal(user: User?, onChatClick: (String, String) -> Unit, onDismiss
         }
     }
 }
-
 @Composable
 fun AstrologyChatView(
     user: User?,
@@ -923,7 +916,6 @@ fun getZodiacSign(dob: String): String {
         else -> "Celestial"
     }
 }
-
 @Composable
 private fun IncomingCallDialog(call: Call, onAccept: () -> Unit, onReject: () -> Unit) {
     Dialog(onDismissRequest = { }) {
@@ -977,7 +969,6 @@ private fun IncomingCallDialog(call: Call, onAccept: () -> Unit, onReject: () ->
         }
     }
 }
-
 @Composable
 fun BlockedListScreen() {
     val repository = remember { FirebaseRepository() }
@@ -1021,7 +1012,6 @@ fun BlockedListScreen() {
         }
     }
 }
-
 @Composable
 fun LikesSummaryBanner(likedByUsers: List<User>) {
     Surface(
@@ -1108,7 +1098,6 @@ fun LikesSummaryBanner(likedByUsers: List<User>) {
         }
     }
 }
-
 @Composable
 fun LikesSectionHeader() {
     Row(
@@ -1147,7 +1136,6 @@ fun LikesSectionHeader() {
         }
     }
 }
-
 @Composable
 fun UpgradeToPremiumBanner() {
     Surface(
@@ -1189,7 +1177,6 @@ fun UpgradeToPremiumBanner() {
         }
     }
 }
-
 @Composable
 fun LikesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) {
     val repository = remember { FirebaseRepository() }
@@ -1256,7 +1243,6 @@ fun LikesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) 
         }
     }
 }
-
 @Composable
 fun EmptyLikesState() {
     Box(modifier = Modifier.fillMaxWidth().height(400.dp), contentAlignment = Alignment.Center) {
@@ -1270,7 +1256,6 @@ fun EmptyLikesState() {
         }
     }
 }
-
 @Composable
 fun LikedUserCard(user: User, onChatClick: () -> Unit, onLikeBack: () -> Unit) {
     Card(
@@ -1376,7 +1361,6 @@ fun LikedUserCard(user: User, onChatClick: () -> Unit, onLikeBack: () -> Unit) {
         }
     }
 }
-
 @Composable
 fun MatchesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) {
     val repository = remember { FirebaseRepository() }
@@ -1445,7 +1429,6 @@ fun MatchesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0
         }
     }
 }
-
 @Composable
 fun ConnectRoomItem(user: User, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
@@ -1524,7 +1507,6 @@ fun ConnectRoomItem(user: User, modifier: Modifier = Modifier, onClick: () -> Un
         )
     }
 }
-
 @Composable
 fun FloatingHeartsBackground() {
     val infiniteTransition = rememberInfiniteTransition(label = "hearts")
@@ -1600,7 +1582,6 @@ fun FloatingHeartsBackground() {
         }
     }
 }
-
 @Composable
 fun NotificationsScreen() {
     Column(modifier = Modifier.fillMaxSize().background(Color.White).padding(16.dp)) {
@@ -1611,7 +1592,6 @@ fun NotificationsScreen() {
         }
     }
 }
-
 @Composable
 fun MatchOverlay(matchedUser: User, onSendMessage: () -> Unit, onKeepSwiping: () -> Unit) {
     Box(
@@ -1674,7 +1654,6 @@ fun MatchOverlay(matchedUser: User, onSendMessage: () -> Unit, onKeepSwiping: ()
         }
     }
 }
-
 @Composable
 fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) {
     val repository = remember { FirebaseRepository() }
@@ -1921,7 +1900,6 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
         }
     }
 }
-
 @Composable
 fun InterestChip(text: String) {
     Surface(
@@ -1938,7 +1916,6 @@ fun InterestChip(text: String) {
         )
     }
 }
-
 @Composable
 fun ActionCircleButton(
     icon: ImageVector,
@@ -1990,64 +1967,29 @@ fun ActionCircleButton(
         )
     }
 }
-
 @Composable
 fun SettingsScreen() {
     val items = listOf(
-        Triple("Account", "Edit your profile and preferences", Icons.Outlined.Person),
-        Triple("Privacy", "Manage your privacy settings", Icons.Outlined.Lock),
-        Triple("Notifications", "Manage your notifications", Icons.Outlined.Notifications),
-        Triple("Subscription", "Manage your subscription", Icons.Outlined.CardMembership),
-        Triple("Help & Support", "Get help and support", Icons.Outlined.HelpOutline),
-        Triple("About", "App version 1.0.0", Icons.Outlined.Info)
+        "Account" to Icons.Default.Person,
+        "Privacy" to Icons.Default.Lock,
+        "Notifications" to Icons.Default.Notifications,
+        "Subscription" to Icons.Default.Star,
+        "Help & Support" to Icons.Default.Help,
+        "About" to Icons.Default.Info
     )
 
     LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        items(items) { (title, subtitle, icon) ->
+        items(items) { (title, icon) ->
             ListItem(
-                headlineContent = { 
-                    Text(
-                        text = title, 
-                        fontWeight = FontWeight.Bold, 
-                        fontSize = 16.sp,
-                        color = Color.Black
-                    ) 
-                },
-                supportingContent = { 
-                    Text(
-                        text = subtitle, 
-                        fontSize = 13.sp, 
-                        color = Color.Gray
-                    ) 
-                },
-                leadingContent = { 
-                    Icon(
-                        imageVector = icon, 
-                        contentDescription = null, 
-                        tint = Color.Black.copy(alpha = 0.8f),
-                        modifier = Modifier.size(24.dp)
-                    ) 
-                },
-                trailingContent = { 
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight, 
-                        contentDescription = null,
-                        tint = Color.LightGray,
-                        modifier = Modifier.size(20.dp)
-                    ) 
-                },
-                modifier = Modifier.clickable { },
-                colors = ListItemDefaults.colors(containerColor = Color.White)
+                headlineContent = { Text(title) },
+                leadingContent = { Icon(icon, contentDescription = null, tint = Color.Gray) },
+                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
+                modifier = Modifier.clickable { }
             )
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp), 
-                thickness = 0.5.dp, 
-                color = Color.LightGray.copy(alpha = 0.3f)
-            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6))
         }
     }
 }
-
 @Composable
 fun SafetyCenterScreen() {
     Column(
@@ -2067,7 +2009,6 @@ fun SafetyCenterScreen() {
         SafetyItem("Verify Your Profile", Icons.Default.CheckCircle, isVerified = true)
     }
 }
-
 @Composable
 fun SafetyItem(title: String, icon: ImageVector, isVerified: Boolean = false) {
     Surface(
@@ -2092,7 +2033,6 @@ fun SafetyItem(title: String, icon: ImageVector, isVerified: Boolean = false) {
         }
     }
 }
-
 @Composable
 fun FiltersScreen() {
     Column(modifier = Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
@@ -2127,60 +2067,3 @@ fun FiltersScreen() {
     }
 }
 
-@Composable
-fun ChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) {
-    val repository = remember { FirebaseRepository() }
-    val currentUser = remember { FirebaseAuth.getInstance().currentUser }
-    var chats by remember { mutableStateOf<List<Pair<User, Message?>>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var searchQuery by remember { mutableStateOf("") }
-
-    LaunchedEffect(refreshTrigger) {
-        isLoading = true
-        currentUser?.let { repository.getChatList(it.uid).onSuccess { list -> chats = list } }
-        isLoading = false
-    }
-
-    val filteredChats = remember(chats, searchQuery) {
-        if (searchQuery.isEmpty()) chats
-        else chats.filter { (partner, _) -> partner.first_name.contains(searchQuery, ignoreCase = true) || partner.last_name.contains(searchQuery, ignoreCase = true) }
-    }
-
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        OutlinedTextField(
-            value = searchQuery, onValueChange = { searchQuery = it }, modifier = Modifier.fillMaxWidth().padding(16.dp),
-            placeholder = { Text("Search messages...") }, leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            trailingIcon = { if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Clear, contentDescription = "Clear") } },
-            shape = RoundedCornerShape(12.dp), colors = TextFieldDefaults.colors(focusedContainerColor = Color(0xFFF5F5F5), unfocusedContainerColor = Color(0xFFF5F5F5), focusedIndicatorColor = Color(0xFFFF1493), unfocusedIndicatorColor = Color.Transparent),
-            singleLine = true
-        )
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFFF1493)) }
-        } else if (filteredChats.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text = if (searchQuery.isEmpty()) "No messages" else "No results for '$searchQuery'", color = Color.Gray) }
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(filteredChats) { (partner, lastMessage) ->
-                    ChatItem(partner, lastMessage, onChatClick)
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = Color.LightGray.copy(0.5f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ChatItem(partner: User, lastMessage: Message?, onChatClick: (String, String) -> Unit) {
-    val time = lastMessage?.let { SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(it.timestamp)) } ?: ""
-    Row(modifier = Modifier.fillMaxWidth().clickable { onChatClick("${partner.first_name} ${partner.last_name}", partner.id) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        AsyncImage(model = if (partner.profile_image.isNotEmpty()) partner.profile_image else R.drawable.girl, contentDescription = null, modifier = Modifier.size(60.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("${partner.first_name} ${partner.last_name}", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(time, fontSize = 12.sp, color = Color.Gray)
-            }
-            Text(lastMessage?.messageText ?: "Start chatting...", fontSize = 14.sp, color = Color.Gray, maxLines = 1)
-        }
-    }
-}

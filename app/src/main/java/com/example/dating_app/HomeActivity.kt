@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -1016,6 +1017,174 @@ fun BlockedListScreen() {
 }
 
 @Composable
+fun LikesSummaryBanner(likedByUsers: List<User>) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = Color(0xFFFFF0F5),
+        shadowElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Heart Icon Container
+            Surface(
+                modifier = Modifier.size(64.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                shadowElevation = 2.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Favorite,
+                        contentDescription = null,
+                        tint = Color(0xFFFF2D6C),
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // Text Column
+            Column(modifier = Modifier.weight(1.2f)) {
+                Text(
+                    text = "${likedByUsers.size} people",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFC2185B),
+                    maxLines = 1
+                )
+                Text(
+                    text = "liked your profile",
+                    fontSize = 13.sp,
+                    color = Color.Gray,
+                    maxLines = 1
+                )
+            }
+            
+            // Avatars
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                Row(horizontalArrangement = Arrangement.spacedBy((-16).dp)) {
+                    likedByUsers.take(4).forEach { user ->
+                        AsyncImage(
+                            model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .border(2.dp, Color.White, CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            // Button
+            Button(
+                onClick = { },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B21A8)),
+                shape = RoundedCornerShape(16.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                modifier = Modifier.height(40.dp)
+            ) {
+                Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("See all", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+fun LikesSectionHeader() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Default.People,
+                contentDescription = null,
+                tint = Color(0xFFFF2D6C),
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+                Text(
+                    text = "People who like you",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Text(
+                    text = "Start a conversation and connect!",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+            }
+        }
+        
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { }) {
+            Text(text = "Newest", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFC2185B))
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color(0xFFC2185B))
+        }
+    }
+}
+
+@Composable
+fun UpgradeToPremiumBanner() {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xFFFFF0F5)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
+                shadowElevation = 2.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Diamond, contentDescription = null, tint = Color(0xFFFF2D6C))
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "Upgrade to Premium", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Unlock all likes and more features", fontSize = 12.sp, color = Color.Gray)
+            }
+            
+            Button(
+                onClick = { },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF2D6C)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Upgrade", fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
 fun LikesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) {
     val repository = remember { FirebaseRepository() }
     val currentUser = remember { FirebaseAuth.getInstance().currentUser }
@@ -1033,51 +1202,58 @@ fun LikesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) 
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF9FAFB))) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(text = "Likes You", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                Text(text = "${likedByUsers.size} people liked your profile", fontSize = 14.sp, color = Color.Gray)
-            }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize().background(Color.White)
+    ) {
+        // Summary Banner
+        item(span = { GridItemSpan(2) }) {
+            LikesSummaryBanner(likedByUsers)
+        }
+
+        // Section Header
+        item(span = { GridItemSpan(2) }) {
+            LikesSectionHeader()
         }
 
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFFF2D6C)) }
-        } else if (likedByUsers.isEmpty()) {
-            EmptyLikesState()
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(likedByUsers) { user -> 
-                    LikedUserCard(
-                        user = user, 
-                        onUnlike = { /* No-op for 'liked by' screen usually, or 'pass' */ },
-                        onMessage = { 
-                            // Liking them back creates a match
-                            scope.launch {
-                                currentUser?.let { repository.likeProfile(it.uid, user.id) }
-                                onChatClick(user.first_name, user.id)
-                            }
-                        }
-                    ) 
+            item(span = { GridItemSpan(2) }) {
+                Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFFFF2D6C))
                 }
             }
+        } else if (likedByUsers.isEmpty()) {
+            item(span = { GridItemSpan(2) }) {
+                EmptyLikesState()
+            }
+        } else {
+            items(likedByUsers) { user ->
+                LikedUserCard(
+                    user = user,
+                    onChatClick = { onChatClick(user.first_name, user.id) },
+                    onLikeBack = {
+                        scope.launch {
+                            currentUser?.let { repository.likeProfile(it.uid, user.id) }
+                            onChatClick(user.first_name, user.id)
+                        }
+                    }
+                )
+            }
+        }
+
+        // Bottom Premium Banner
+        item(span = { GridItemSpan(2) }) {
+            UpgradeToPremiumBanner()
         }
     }
 }
 
 @Composable
 fun EmptyLikesState() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.fillMaxWidth().height(400.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Surface(modifier = Modifier.size(120.dp), shape = CircleShape, color = Color.White, shadowElevation = 8.dp) {
                 Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.FavoriteBorder, contentDescription = null, modifier = Modifier.size(60.dp), tint = Color(0xFFFF1493).copy(alpha = 0.3f)) }
@@ -1090,27 +1266,105 @@ fun EmptyLikesState() {
 }
 
 @Composable
-fun LikedUserCard(user: User, onUnlike: () -> Unit, onMessage: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().height(260.dp).clickable { }, shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+fun LikedUserCard(user: User, onChatClick: () -> Unit, onLikeBack: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(260.dp),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)), startY = 400f)))
-            if (user.is_online) {
-                Surface(modifier = Modifier.padding(12.dp).size(10.dp).align(Alignment.TopEnd), shape = CircleShape, color = Color.Green, border = BorderStroke(1.dp, Color.White)) {}
+            AsyncImage(
+                model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                            startY = 350f
+                        )
+                    )
+            )
+            
+            // "Chat" Badge (Clickable)
+            Surface(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .align(Alignment.TopEnd)
+                    .clickable { onChatClick() },
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White.copy(alpha = 0.9f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "Chat", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFFF2D6C)))
+                }
             }
-            Column(modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(12.dp)) {
-                Text(text = "${user.first_name}, ${user.dob.takeLast(4).let { 2024 - (it.toIntOrNull() ?: 2000) }}", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(text = user.city, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onMessage, modifier = Modifier.weight(1f).height(36.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1493)), contentPadding = PaddingValues(0.dp), shape = RoundedCornerShape(10.dp)) {
-                        Icon(Icons.Default.ChatBubble, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Chat", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Surface(onClick = onUnlike, modifier = Modifier.size(36.dp), shape = RoundedCornerShape(10.dp), color = Color.White.copy(alpha = 0.2f), contentColor = Color.White) {
-                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Close, contentDescription = "Unlike", modifier = Modifier.size(18.dp)) }
-                    }
+            
+            // User Details
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${user.first_name}, ${user.dob.takeLast(4).let { 2024 - (it.toIntOrNull() ?: 2000) }}",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Verified",
+                        tint = Color(0xFFFF2D6C),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = user.city, color = Color.White, fontSize = 11.sp)
+                }
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Work, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = if(user.occupation.isNotEmpty()) user.occupation else "Student", color = Color.White, fontSize = 11.sp)
+                }
+            }
+            
+            // Heart Button
+            Surface(
+                modifier = Modifier
+                    .padding(12.dp)
+                    .size(40.dp)
+                    .align(Alignment.BottomEnd)
+                    .clickable { onLikeBack() },
+                shape = CircleShape,
+                color = Color.White,
+                shadowElevation = 4.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Favorite,
+                        contentDescription = "Like Back",
+                        tint = Color(0xFFFF2D6C),
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }

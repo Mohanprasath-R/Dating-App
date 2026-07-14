@@ -110,12 +110,12 @@ class HomeActivity : ComponentActivity() {
     }
 }
 
-enum class HomeTab(val label: String, val icon: ImageVector) {
-    Discovery("Discover", Icons.Default.Explore),
-    Likes("Likes", Icons.Default.FavoriteBorder),
-    Matches("Matches", Icons.Default.FavoriteBorder),
-    Message("Message", Icons.Default.ChatBubbleOutline),
-    Chat("Chat", Icons.Default.AutoAwesome)
+enum class HomeTab(val label: String) {
+    Discovery("Discover"),
+    Matches("Matches"),
+    Likes("Likes"),
+    Message("Chats"),
+    Chat("Astrology")
 }
 
 private fun getAge(dob: String): String {
@@ -211,11 +211,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
         profileSubScreen == "details" -> "Profile Details"
         profileSubScreen == "edit" -> "Edit Profile"
         else -> when (selectedTab) {
-            HomeTab.Discovery -> "Discovery"
-            HomeTab.Likes -> "Likes"
+            HomeTab.Discovery -> "Discover"
             HomeTab.Matches -> "Matches"
-            HomeTab.Message -> "Messages"
-            HomeTab.Chat -> "Chat"
+            HomeTab.Likes -> "Likes"
+            HomeTab.Message -> "Chats"
+            HomeTab.Chat -> "Astrology"
         }
     }
 
@@ -383,40 +383,120 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
             },
             bottomBar = {
                 if (currentSubScreen == null) {
-                    NavigationBar(containerColor = Color.White, contentColor = Color(0xFFFF1493)) {
-                        HomeTab.entries.forEach { tab ->
-                            NavigationBarItem(
-                                selected = selectedTab == tab,
-                                onClick = { selectedTab = tab },
-                                icon = { 
-                                    val iconModifier = Modifier.size(26.dp)
-                                    when (tab) {
-                                        HomeTab.Discovery -> Icon(Icons.Default.Explore, contentDescription = null, modifier = iconModifier)
-                                        HomeTab.Likes -> Icon(Icons.Default.FavoriteBorder, contentDescription = null, modifier = iconModifier)
-                                        HomeTab.Matches -> Icon(painter = painterResource(id = R.drawable.ic_hearts), contentDescription = null, modifier = iconModifier)
-                                        HomeTab.Message -> {
-                                            if (unreadMessageCount > 0) {
-                                                BadgedBox(
-                                                    badge = { Badge(containerColor = Color(0xFFFF1493)) { Text(unreadMessageCount.toString(), color = Color.White) } }
-                                                ) {
-                                                    Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, modifier = iconModifier)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp, start = 12.dp, end = 12.dp),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(80.dp),
+                            shape = RoundedCornerShape(40.dp),
+                            color = Color.White,
+                            shadowElevation = 12.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                HomeTab.entries.forEach { tab ->
+                                    val isSelected = selectedTab == tab
+                                    val contentColor = if (isSelected) Color(0xFFFF2D6C) else Color(0xFF757575)
+                                    
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null,
+                                                onClick = { selectedTab = tab }
+                                            )
+                                    ) {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier.size(40.dp)
+                                        ) {
+                                            if (isSelected) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .background(Color(0xFFFF2D6C).copy(alpha = 0.08f), CircleShape)
+                                                )
+                                            }
+                                            
+                                            BadgedBox(
+                                                badge = {
+                                                    when (tab) {
+                                                        HomeTab.Likes -> {
+                                                            Badge(
+                                                                containerColor = Color(0xFFFF2D6C),
+                                                                modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
+                                                            ) { 
+                                                                Text("3", color = Color.White, fontSize = 9.sp) 
+                                                            }
+                                                        }
+                                                        HomeTab.Message -> {
+                                                            if (unreadMessageCount > 0) {
+                                                                Badge(containerColor = Color(0xFFFF2D6C)) { 
+                                                                    Text(unreadMessageCount.toString(), color = Color.White, fontSize = 9.sp) 
+                                                                }
+                                                            }
+                                                        }
+                                                        HomeTab.Matches -> {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Favorite, 
+                                                                contentDescription = null, 
+                                                                tint = Color(0xFFFF2D6C), 
+                                                                modifier = Modifier.size(10.dp).offset(x = 6.dp, y = (-6).dp)
+                                                            )
+                                                        }
+                                                        else -> {}
+                                                    }
                                                 }
-                                            } else {
-                                                Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, modifier = iconModifier)
+                                            ) {
+                                                Icon(
+                                                    imageVector = when (tab) {
+                                                        HomeTab.Discovery -> Icons.Default.Favorite
+                                                        HomeTab.Matches -> Icons.Default.People
+                                                        HomeTab.Likes -> Icons.Default.Favorite
+                                                        HomeTab.Message -> Icons.Default.Chat
+                                                        HomeTab.Chat -> Icons.Default.AccountCircle
+                                                    },
+                                                    contentDescription = tab.label,
+                                                    tint = contentColor,
+                                                    modifier = Modifier.size(26.dp)
+                                                )
                                             }
                                         }
-                                        HomeTab.Chat -> Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = iconModifier)
+                                        
+                                        Spacer(modifier = Modifier.height(0.dp))
+                                        
+                                        Text(
+                                            text = tab.label,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = contentColor
+                                        )
+                                        
+                                        if (isSelected) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(16.dp)
+                                                    .height(2.5.dp)
+                                                    .background(Color(0xFFFF2D6C), RoundedCornerShape(2.dp))
+                                            )
+                                        } else {
+                                            Spacer(modifier = Modifier.height(6.5.dp))
+                                        }
                                     }
-                                },
-                                label = { Text(tab.label, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = Color(0xFFFF1493), 
-                                    selectedTextColor = Color(0xFFFF1493),
-                                    unselectedIconColor = Color.Gray, 
-                                    unselectedTextColor = Color.Gray,
-                                    indicatorColor = Color(0xFFFF1493).copy(alpha = 0.1f)
-                                )
-                            )
+                                }
+                            }
                         }
                     }
                 }
@@ -442,8 +522,8 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                         else -> {
                             when (selectedTab) {
                                 HomeTab.Discovery -> DiscoveryScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
-                                HomeTab.Likes -> LikesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                                 HomeTab.Matches -> MatchesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
+                                HomeTab.Likes -> LikesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                                 HomeTab.Message -> ModernChatListScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                                 HomeTab.Chat -> AstrologyChatView(
                                     user = currentUserProfile,
@@ -1023,6 +1103,7 @@ fun BlockedListScreen() {
 }
 @Composable
 fun LikesSummaryBanner(likedByUsers: List<User>) {
+    val context = LocalContext.current
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -1094,7 +1175,7 @@ fun LikesSummaryBanner(likedByUsers: List<User>) {
             
             // Button
             Button(
-                onClick = { },
+                onClick = { context.startActivity(Intent(context, PremiumActivity::class.java)) },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B21A8)),
                 shape = RoundedCornerShape(16.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp),
@@ -1147,6 +1228,7 @@ fun LikesSectionHeader() {
 }
 @Composable
 fun UpgradeToPremiumBanner() {
+    val context = LocalContext.current
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -1177,7 +1259,7 @@ fun UpgradeToPremiumBanner() {
             }
             
             Button(
-                onClick = { },
+                onClick = { context.startActivity(Intent(context, PremiumActivity::class.java)) },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF2D6C)),
                 shape = RoundedCornerShape(12.dp)
             ) {

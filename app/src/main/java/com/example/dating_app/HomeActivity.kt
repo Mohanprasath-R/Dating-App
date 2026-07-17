@@ -364,20 +364,22 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                 }
             },
             floatingActionButton = {
-                if (currentSubScreen == null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                if (currentSubScreen == null && selectedTab == HomeTab.Matches) {
+                    FloatingActionButton(
+                        onClick = { showAstrologyModal = true },
+                        containerColor = Color(0xFFFF2D6C),
+                        contentColor = Color.White,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .padding(bottom = 80.dp, end = 8.dp)
+                            .size(64.dp)
+                            .shadow(12.dp, CircleShape)
                     ) {
-                        var showText by remember { mutableStateOf(false) }
-                        LaunchedEffect(Unit) {
-                            delay(2000)
-                            showText = true
-                            delay(3000) // Show for 3 seconds
-                            showText = false
-                        }
-
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "AI Assistant",
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
                 }
             },
@@ -1476,13 +1478,16 @@ fun MatchesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0
             while (true) {
                 scrollState.animateScrollBy(
                     value = 150f, 
-                    animationSpec = tween(durationMillis = 3000, easing = LinearEasing)
+                    animationSpec = tween<Float>(
+                        durationMillis = 3000,
+                        easing = LinearEasing
+                    )
                 )
             }
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF5D1049))) {
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF4A0033))) {
         Box(modifier = Modifier.fillMaxSize().weight(1f)) {
             // Animated Floating Background Hearts (Zig-Zag motion)
             FloatingHeartsBackground()
@@ -1600,77 +1605,14 @@ fun ConnectRoomItem(user: User, modifier: Modifier = Modifier, onClick: () -> Un
 }
 @Composable
 fun FloatingHeartsBackground() {
-    val infiniteTransition = rememberInfiniteTransition(label = "hearts")
-    
     Box(modifier = Modifier.fillMaxSize()) {
-        repeat(15) { i ->
-            val xSeed = (i * 73) % 100 / 100f
-            val duration = 6000 + (i * 400) % 4000
-            val delay = (i * 900) % 6000
-            
-            val alpha by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = 0f,
-                animationSpec = infiniteRepeatable(
-                    animation = keyframes {
-                        durationMillis = duration
-                        delayMillis = delay
-                        0f at 0
-                        0.4f at duration / 2
-                        0f at duration
-                    },
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "alpha"
-            )
-            
-            val scale by infiniteTransition.animateFloat(
-                initialValue = 0.5f,
-                targetValue = 1.2f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(duration, delay, LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "scale"
-            )
-            
-            // Zig-Zag (Wavy) vertical movement
-            val yProgress by infiniteTransition.animateFloat(
-                initialValue = 1f,
-                targetValue = -0.2f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(duration, delay, LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "yProgress"
-            )
-
-            // Horizontal Zig-Zag (Sway)
-            val xSway by infiniteTransition.animateFloat(
-                initialValue = -20f,
-                targetValue = 20f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(duration / 4, 0, LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "xSway"
-            )
-            
-            Icon(
-                imageVector = Icons.Default.Favorite,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = alpha),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        translationX = (size.width * xSeed) + xSway.dp.toPx()
-                        translationY = size.height * yProgress
-                        scaleX = scale
-                        scaleY = scale
-                    }
-                    .size(24.dp)
-            )
-        }
+        // Test: Only show one very small blue heart to confirm if this is the right place
+        Icon(
+            imageVector = Icons.Default.Favorite,
+            contentDescription = null,
+            tint = Color.Blue,
+            modifier = Modifier.size(20.dp).align(Alignment.Center)
+        )
     }
 }
 @Composable

@@ -4,15 +4,24 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.graphicsLayer
+import com.datingapp.R
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import com.example.dating_app.model.User
 import com.example.dating_app.repository.FirebaseRepository
 import com.google.firebase.auth.FirebaseAuth
@@ -34,6 +44,7 @@ class PasskeyActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser
@@ -72,21 +83,8 @@ class PasskeyActivity : ComponentActivity() {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color(0xFF050008))
+                        .background(Color(0xFF060008))
                 ) {
-                    // Reuse Bokeh Background from MainActivity
-                    val bokehs = remember {
-                        List(10) {
-                            PasskeyBokehData(
-                                x = (0..1000).random().toFloat(),
-                                y = (0..2000).random().toFloat(),
-                                size = (100..250).random().dp,
-                                color = if (it % 2 == 0) Color(0xFFFF1493).copy(alpha = 0.15f) else Color(0xFF9C27B0).copy(alpha = 0.1f)
-                            )
-                        }
-                    }
-                    bokehs.forEach { PasskeyAnimatedBokeh(it) }
-
                     if (isLoading) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(color = Color(0xFFFF1493))
@@ -125,162 +123,316 @@ fun PasskeyScreen(
     var passcode by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
     
-    // Shake animation for error
-    val shakeOffset = remember { Animatable(0f) }
-    LaunchedEffect(isError) {
-        if (isError) {
-            repeat(4) {
-                shakeOffset.animateTo(20f, tween(50, easing = LinearEasing))
-                shakeOffset.animateTo(-20f, tween(50, easing = LinearEasing))
-            }
-            shakeOffset.animateTo(0f, tween(50, easing = LinearEasing))
-            delay(1000)
-            isError = false
-            passcode = ""
+    // Floating Hearts Background
+    val heartParticles = remember {
+        List(40) {
+            HeartParticleData(
+                x = (0..1000).random().toFloat(),
+                y = (0..2000).random().toFloat(),
+                size = (10..40).random().dp,
+                speed = (6000..12000).random(),
+                alpha = (0.05f + (0..30).random() / 100f)
+            )
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.Lock,
-            contentDescription = null,
-            tint = Color(0xFFFF1493),
+    Box(modifier = Modifier.fillMaxSize()) {
+        heartParticles.forEach { HeartParticle(it) }
+
+        // Shake animation for error
+        val shakeOffset = remember { Animatable(0f) }
+        LaunchedEffect(isError) {
+            if (isError) {
+                repeat(4) {
+                    shakeOffset.animateTo(20f, tween(50, easing = LinearEasing))
+                    shakeOffset.animateTo(-20f, tween(50, easing = LinearEasing))
+                }
+                shakeOffset.animateTo(0f, tween(50, easing = LinearEasing))
+                delay(1000)
+                isError = false
+                passcode = ""
+            }
+        }
+
+        Column(
             modifier = Modifier
-                .size(64.dp)
-                .background(Color(0xFFFF1493).copy(alpha = 0.1f), CircleShape)
-                .padding(16.dp)
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Welcome Back",
-            color = Color.White,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = "Enter your PIN to unlock",
-            color = Color.White.copy(alpha = 0.6f),
-            fontSize = 16.sp
-        )
-
-        Spacer(modifier = Modifier.height(48.dp))
-
-        // Visual representation of the 4 digits
-        Row(
-            modifier = Modifier.offset(x = shakeOffset.value.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .systemBarsPadding()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            repeat(4) { index ->
-                val isFilled = index < passcode.length
-                val dotScale by animateFloatAsState(
-                    targetValue = if (isFilled) 1f else 0f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                    label = "dot"
-                )
-                
-                Box(
-                    modifier = Modifier
-                        .size(60.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isError) Color.Red.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.05f))
-                        .border(
-                            width = 2.dp,
-                            color = when {
-                                isError -> Color.Red
-                                isFilled -> Color(0xFFFF1493)
-                                else -> Color.White.copy(alpha = 0.1f)
-                            },
-                            shape = RoundedCornerShape(16.dp)
-                        ),
-                    contentAlignment = Alignment.Center
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Header
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+
+                // Logo
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(16.dp)
-                            .scale(dotScale)
-                            .clip(CircleShape)
-                            .background(if (isError) Color.Red else Color(0xFFFF1493))
+                    Text(
+                        text = "HeyDate",
+                        color = Color.White,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Icon(
+                        painter = painterResource(R.drawable.ic_heart),
+                        contentDescription = null,
+                        tint = Color(0xFFFF1493),
+                        modifier = Modifier.size(24.dp)
                     )
                 }
-            }
-        }
 
-        if (isError) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                text = "Incorrect PIN, please try again",
-                color = Color.Red.copy(alpha = 0.8f),
-                fontSize = 14.sp
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(64.dp))
-        
-        NumericKeypad(onNumberClick = { num ->
-            if (passcode.length < 4 && !isError) {
-                passcode += num
-                if (passcode.length == 4) {
-                    if (passcode == correctPasscode) {
-                        onSuccess()
-                    } else {
-                        isError = true
+                Spacer(modifier = Modifier.height(20.dp))
+
+                HeartLock()
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    "Welcome Back",
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    "Enter your PIN to unlock",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 16.sp
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                PinIndicator(
+                    passcode = passcode,
+                    isError = isError,
+                    shakeOffset = shakeOffset.value
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            NumericKeypad(
+                onNumberClick = { number ->
+                    if (passcode.length < 4 && !isError) {
+                        passcode += number
+
+                        if (passcode.length == 4) {
+                            if (passcode == correctPasscode) {
+                                onSuccess()
+                            } else {
+                                isError = true
+                            }
+                        }
+                    }
+                },
+                onDeleteClick = {
+                    if (passcode.isNotEmpty() && !isError) {
+                        passcode = passcode.dropLast(1)
                     }
                 }
-            }
-        }, onDeleteClick = {
-            if (passcode.isNotEmpty() && !isError) {
-                passcode = passcode.dropLast(1)
-            }
-        })
+            )
 
-        Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(30.dp))
 
-        TextButton(onClick = { onUsePasswordInstead() }) {
-            Text(
-                text = "Use Password Instead",
-                color = Color(0xFFFF1493),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
+            PasswordButton(
+                onClick = onUsePasswordInstead
             )
         }
     }
 }
 
 @Composable
-fun NumericKeypad(onNumberClick: (String) -> Unit, onDeleteClick: () -> Unit) {
-    val numbers = listOf(
+fun HeartLock() {
+    Box(
+        contentAlignment = Alignment.Center
+    ) {
+        // Outer glow
+        Icon(
+            painter = painterResource(id = R.drawable.ic_heart),
+            contentDescription = null,
+            tint = Color(0xFFFF1493).copy(alpha = 0.15f),
+            modifier = Modifier.size(160.dp)
+        )
+
+        // Middle glow
+        Icon(
+            painter = painterResource(id = R.drawable.ic_heart),
+            contentDescription = null,
+            tint = Color(0xFFFF1493).copy(alpha = 0.3f),
+            modifier = Modifier.size(140.dp)
+        )
+
+        // Main heart
+        Icon(
+            painter = painterResource(id = R.drawable.ic_heart),
+            contentDescription = null,
+            tint = Color(0xFFFF1493),
+            modifier = Modifier.size(100.dp)
+        )
+
+        // Keyhole
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black)
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(width = 4.dp, height = 8.dp)
+                    .background(Color.Black)
+            )
+        }
+    }
+}
+
+@Composable
+fun PinIndicator(
+    passcode: String,
+    isError: Boolean,
+    shakeOffset: Float
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .offset(x = shakeOffset.dp),
+        horizontalArrangement = Arrangement.Center
+    ) {
+        repeat(4) { index ->
+            val filled = index < passcode.length
+            val current = index == passcode.length
+
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 6.dp)
+                    .size(58.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White.copy(alpha = 0.05f))
+                    .border(
+                        width = 1.5.dp,
+                        color = when {
+                            isError -> Color.Red
+                            filled || current -> Color(0xFFFF1493)
+                            else -> Color.White.copy(alpha = 0.15f)
+                        },
+                        shape = RoundedCornerShape(14.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (filled) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(
+                                Color.White,
+                                CircleShape
+                            )
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PasswordButton(
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        shape = RoundedCornerShape(30.dp),
+        color = Color.Transparent,
+        border = BorderStroke(
+            1.dp,
+            Color(0xFFFF1493).copy(alpha = .6f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                Icons.Default.Fingerprint,
+                null,
+                tint = Color(0xFFFF1493)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Text(
+                "Use Password Instead",
+                color = Color(0xFFFF1493),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun NumericKeypad(
+    onNumberClick: (String) -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    val rows = listOf(
         listOf("1", "2", "3"),
         listOf("4", "5", "6"),
         listOf("7", "8", "9"),
         listOf("", "0", "⌫")
     )
 
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        numbers.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
-                row.forEach { char ->
-                    if (char.isEmpty()) {
-                        Spacer(modifier = Modifier.size(72.dp))
-                    } else {
-                        KeypadButton(
-                            text = char,
-                            onClick = {
-                                if (char == "⌫") onDeleteClick()
-                                else onNumberClick(char)
-                            }
-                        )
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+
+        rows.forEach { row ->
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                row.forEach { item ->
+
+                    when (item) {
+
+                        "" -> Spacer(modifier = Modifier.size(78.dp))
+
+                        "⌫" ->
+                            KeypadButton(
+                                text = item,
+                                onClick = onDeleteClick
+                            )
+
+                        else ->
+                            KeypadButton(
+                                text = item,
+                                onClick = { onNumberClick(item) }
+                            )
                     }
                 }
             }
@@ -289,54 +441,89 @@ fun NumericKeypad(onNumberClick: (String) -> Unit, onDeleteClick: () -> Unit) {
 }
 
 @Composable
-fun KeypadButton(text: String, onClick: () -> Unit) {
+fun KeypadButton(
+    text: String,
+    onClick: () -> Unit
+) {
+
     Surface(
         onClick = onClick,
-        modifier = Modifier.size(72.dp),
+        modifier = Modifier.size(76.dp),
         shape = CircleShape,
-        color = Color.White.copy(alpha = 0.05f),
-        contentColor = Color.White
+        color = Color.White.copy(alpha = 0.07f)
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = text,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Light
-            )
+
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+
+            if (text == "⌫") {
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Backspace,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+
+            } else {
+
+                Text(
+                    text = text,
+                    color = Color.White,
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
 
+
 @Composable
-fun PasskeyAnimatedBokeh(data: PasskeyBokehData) {
-    val infiniteTransition = rememberInfiniteTransition(label = "bokeh")
+fun HeartParticle(data: HeartParticleData) {
+    val infiniteTransition = rememberInfiniteTransition(label = "heart")
     val offsetY by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = -150f,
+        targetValue = -300f,
         animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(data.speed, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
         label = "move"
     )
+    
     val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.1f,
-        targetValue = 0.4f,
+        initialValue = data.alpha,
+        targetValue = 0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(5000, easing = LinearOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(data.speed, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
         label = "fade"
     )
 
-    Box(
+    Icon(
+        painter = painterResource(id = R.drawable.ic_heart),
+        contentDescription = null,
+        tint = Color(0xFFFF1493),
         modifier = Modifier
             .offset(x = data.x.dp, y = (data.y + offsetY).dp)
             .size(data.size)
             .alpha(alpha)
-            .blur(60.dp)
-            .background(data.color, CircleShape)
+            .graphicsLayer {
+                rotationZ = (data.x % 45)
+            }
     )
 }
 
-data class PasskeyBokehData(val x: Float, val y: Float, val size: androidx.compose.ui.unit.Dp, val color: Color)
+@Preview(showBackground = true, backgroundColor = 0xFF050008)
+@Composable
+fun PasskeyScreenPreview() {
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF050008))) {
+        PasskeyScreen(correctPasscode = "1234", onSuccess = {}, onUsePasswordInstead = {})
+    }
+}
+
+data class HeartParticleData(val x: Float, val y: Float, val size: androidx.compose.ui.unit.Dp, val speed: Int, val alpha: Float)

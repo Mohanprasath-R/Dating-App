@@ -28,6 +28,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -388,14 +389,15 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 10.dp, start = 12.dp, end = 12.dp),
+                            .padding(bottom = 6.dp, start = 12.dp, end = 12.dp),
                         contentAlignment = Alignment.BottomCenter
                     ) {
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(80.dp),
-                            shape = RoundedCornerShape(40.dp),
+                                .height(64.dp)
+                                .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(32.dp)),
+                            shape = RoundedCornerShape(32.dp),
                             color = Color.White,
                             shadowElevation = 12.dp
                         ) {
@@ -421,12 +423,18 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                     ) {
                                         Box(
                                             contentAlignment = Alignment.Center,
-                                            modifier = Modifier.size(40.dp)
+                                            modifier = Modifier.size(36.dp)
                                         ) {
                                             if (isSelected) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(36.dp)
+                                                        .size(32.dp)
+                                                        .blur(8.dp)
+                                                        .background(Color(0xFFFF2D6C).copy(alpha = 0.15f), CircleShape)
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(32.dp)
                                                         .background(Color(0xFFFF2D6C).copy(alpha = 0.08f), CircleShape)
                                                 )
                                             }
@@ -471,30 +479,35 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                                     },
                                                     contentDescription = tab.label,
                                                     tint = contentColor,
-                                                    modifier = Modifier.size(26.dp)
+                                                    modifier = Modifier.size(22.dp)
                                                 )
                                             }
                                         }
                                         
-                                        Spacer(modifier = Modifier.height(0.dp))
-                                        
                                         Text(
                                             text = tab.label,
-                                            fontSize = 11.sp,
+                                            fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = contentColor
                                         )
                                         
                                         if (isSelected) {
-                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Spacer(modifier = Modifier.height(2.dp))
                                             Box(
                                                 modifier = Modifier
-                                                    .width(16.dp)
-                                                    .height(2.5.dp)
-                                                    .background(Color(0xFFFF2D6C), RoundedCornerShape(2.dp))
+                                                    .width(12.dp)
+                                                    .height(2.dp)
+                                                    .blur(1.dp)
+                                                    .background(Color(0xFFFF2D6C), RoundedCornerShape(1.dp))
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(12.dp)
+                                                    .height(2.dp)
+                                                    .background(Color(0xFFFF2D6C), RoundedCornerShape(1.dp))
                                             )
                                         } else {
-                                            Spacer(modifier = Modifier.height(6.5.dp))
+                                            Spacer(modifier = Modifier.height(4.dp))
                                         }
                                     }
                                 }

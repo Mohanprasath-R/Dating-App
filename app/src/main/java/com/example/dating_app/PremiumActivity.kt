@@ -8,10 +8,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
@@ -25,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -44,63 +43,48 @@ class PremiumActivity : ComponentActivity() {
 fun PremiumScreen(onClose: () -> Unit) {
     var selectedPlan by remember { mutableIntStateOf(1) } // 0: 1 Month, 1: 6 Months, 2: 12 Months
 
-    Box(
+    // No scrolling: everything is laid out in normal flow so the whole
+    // screen (header, hero, benefits, pricing, CTA) always fits on screen.
+    // The middle block gets the remaining space and centers its content,
+    // so it compresses gracefully on shorter screens instead of clipping.
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
-            .statusBarsPadding()
     ) {
+        // Header: handle + close
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(y = 20.dp)
+
+        ) {
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.align(Alignment.TopEnd)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+            }
+        }
+        // Middle content: takes up remaining space, centered vertically
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 120.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .weight(2f)
+                .fillMaxWidth()
+                .fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            // Header Handle and Close
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                // Handle bar
-                Box(
-                    modifier = Modifier
-                        .size(40.dp, 4.dp)
-                        .clip(CircleShape)
-                        .background(Color.LightGray.copy(alpha = 0.5f))
-                        .align(Alignment.TopCenter)
-                )
-                
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.align(Alignment.TopEnd)
-                ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
-                }
-            }
-
-            // Big Heart with Crown
+            // Icon with Crown
             Box(contentAlignment = Alignment.Center) {
-                // Background Glow
                 Box(
                     modifier = Modifier
-                        .size(100.dp)
+                        .size(78.dp)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(Color(0xFFFF2D6C).copy(alpha = 0.1f), Color.Transparent)
                             )
                         )
-                )
-                
-                // Stars around
-                Icon(
-                    imageVector = Icons.Default.AutoAwesome,
-                    contentDescription = null,
-                    tint = Color(0xFFFF2D6C),
-                    modifier = Modifier
-                        .size(20.dp)
-                        .align(Alignment.TopStart)
-                        .offset(x = (-5).dp, y = 5.dp)
                 )
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
@@ -108,11 +92,18 @@ fun PremiumScreen(onClose: () -> Unit) {
                     tint = Color(0xFFFF2D6C),
                     modifier = Modifier
                         .size(16.dp)
-                        .align(Alignment.TopEnd)
-                        .offset(x = 10.dp, y = (-2).dp)
+                        .align(Alignment.TopStart)
+                        .offset(x = (-3).dp, y = 3.dp)
                 )
-
-                // Heart Container
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color(0xFFFF2D6C),
+                    modifier = Modifier
+                        .size(13.dp)
+                        .align(Alignment.TopEnd)
+                        .offset(x = 7.dp, y = (-1).dp)
+                )
                 Box(
                     modifier = Modifier
                         .size(80.dp)
@@ -128,23 +119,22 @@ fun PremiumScreen(onClose: () -> Unit) {
                         imageVector = Icons.Default.WorkspacePremium,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(35.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Title
             Text(
                 text = "Upgrade to",
-                fontSize = 24.sp,
+                fontSize = 19.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.Black
             )
             Text(
                 text = "Premium",
-                fontSize = 28.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.ExtraBold,
                 style = LocalTextStyle.current.copy(
                     brush = Brush.horizontalGradient(
@@ -153,29 +143,29 @@ fun PremiumScreen(onClose: () -> Unit) {
                 )
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
 
             Text(
                 text = "Get more matches and unlock\nexciting features",
-                fontSize = 14.sp,
+                fontSize = 12.sp,
                 color = Color.Gray,
                 textAlign = TextAlign.Center,
-                lineHeight = 18.sp
+                lineHeight = 15.sp
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(35.dp))
 
             // Benefits Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                 border = BorderStroke(1.dp, Color(0xFFF3F4F6))
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp)) {
                     BenefitItem("Unlimited Likes", "Like as many people as you want", Icons.Default.Favorite)
                     BenefitItem("See who likes you", "See everyone who likes you", Icons.Default.Visibility)
                     BenefitItem("Boost your profile", "Get more visibility & more matches", Icons.Default.RocketLaunch)
@@ -183,64 +173,64 @@ fun PremiumScreen(onClose: () -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(35.dp))
 
-            // Pricing Plans
+            // Pricing Plans — height(IntrinsicSize.Min) makes the row exactly
+            // as tall as its tallest child (the "Most Popular" column with its
+            // badge), and each card fillMaxHeight()s to match. This auto-sizes
+            // to whatever the text actually needs, so nothing gets clipped.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 PricingPlan(
                     duration = "1 Month",
-                    price = "₹599",
+                    price = "\u20b9599",
                     savings = "Save 21%",
                     isSelected = selectedPlan == 0,
-                    modifier = Modifier.weight(1f).height(130.dp),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = { selectedPlan = 0 }
                 )
                 PricingPlan(
                     duration = "6 Months",
-                    price = "₹379",
+                    price = "\u20b9379",
                     savings = "Save 40%",
                     isSelected = selectedPlan == 1,
                     isPopular = true,
-                    modifier = Modifier.weight(1f).height(130.dp),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = { selectedPlan = 1 }
                 )
                 PricingPlan(
                     duration = "12 Months",
-                    price = "₹459",
+                    price = "\u20b9459",
                     savings = "Save 50%",
                     isSelected = selectedPlan == 2,
-                    modifier = Modifier.weight(1f).height(130.dp),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     onClick = { selectedPlan = 2 }
                 )
             }
         }
 
-
-        // Bottom Action Bar
+        // Bottom Action Bar — normal flow, not an overlay, so it can never
+        // cover content above it and never needs a scroll to be reached.
         Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             color = Color.White,
             shadowElevation = 16.dp
         ) {
             Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .navigationBarsPadding(),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Button(
                     onClick = { },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(64.dp),
-                    shape = RoundedCornerShape(32.dp),
+                        .height(54.dp),
+                    shape = RoundedCornerShape(27.dp),
                     contentPadding = PaddingValues(0.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
                 ) {
@@ -262,48 +252,48 @@ fun PremiumScreen(onClose: () -> Unit) {
                             Surface(
                                 shape = CircleShape,
                                 color = Color.White,
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(34.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.WorkspacePremium,
                                         contentDescription = null,
                                         tint = Color(0xFFFA2E69),
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                             }
-                            
+
                             Text(
                                 text = "Continue",
-                                fontSize = 20.sp,
+                                fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
-                            
+
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Security,
                         contentDescription = null,
                         tint = Color(0xFFC71585),
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Secure payments • Cancel anytime • 100% safe",
-                        fontSize = 11.sp,
+                        text = "Secure payments \u2022 Cancel anytime \u2022 100% safe",
+                        fontSize = 10.sp,
                         color = Color.Gray,
                         fontWeight = FontWeight.Medium
                     )
@@ -318,11 +308,11 @@ fun BenefitItem(title: String, subtitle: String, icon: ImageVector) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(38.dp),
             shape = CircleShape,
             color = Color(0xFFFF2D6C).copy(alpha = 0.08f)
         ) {
@@ -331,23 +321,23 @@ fun BenefitItem(title: String, subtitle: String, icon: ImageVector) {
                     imageVector = icon,
                     contentDescription = null,
                     tint = Color(0xFFFF2D6C),
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(19.dp)
                 )
             }
         }
-        
-        Spacer(modifier = Modifier.width(16.dp))
-        
+
+        Spacer(modifier = Modifier.width(14.dp))
+
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
-            Text(text = subtitle, fontSize = 13.sp, color = Color.Gray)
+            Text(text = title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.Black)
+            Text(text = subtitle, fontSize = 11.sp, color = Color.Gray)
         }
-        
+
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = null,
             tint = Color.LightGray,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(18.dp)
         )
     }
 }
@@ -362,63 +352,82 @@ fun PricingPlan(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    Box(modifier = modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Reserve the same vertical space above every card, whether or not
+        // it shows the badge, so all three card bodies stay aligned.
+        if (isPopular) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFFFF2D6C)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "Most Popular", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+        } else {
+            Spacer(modifier = Modifier.height(27.dp))
+        }
+
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(150.dp)
+                .weight(1f)
                 .clickable { onClick() },
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(20.dp),
             border = BorderStroke(
                 width = if (isSelected) 2.5.dp else 1.dp,
                 color = if (isSelected) Color(0xFFFF2D6C) else Color.LightGray.copy(alpha = 0.3f)
             ),
-            color = if (isSelected) Color.White else Color.White
+            color = Color.White
         ) {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(text = duration, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
-                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = duration, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text(text = price, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = if(isSelected) Color(0xFFC71585) else Color.Black)
-                    Text(text = "/mo", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp))
+                    Text(text = price, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color(0xFFC71585) else Color.Black)
+                    Text(text = "/mo", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp))
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = if (isSelected) Color(0xFFFF2D6C).copy(alpha = 0.1f) else Color(0xFFF3F4F6)
                 ) {
                     Text(
                         text = savings,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isSelected) Color(0xFFFF2D6C) else Color.Gray
                     )
                 }
             }
         }
-        
-        if (isPopular) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .offset(y = (-12).dp),
-                shape = RoundedCornerShape(10.dp),
-                color = Color(0xFFFF2D6C)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Most Popular", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
+    }
+}
+
+@Preview(
+    showBackground = true,
+    showSystemUi = true,
+    device = "id:pixel_8"
+)
+@Composable
+fun PremiumScreenPreview() {
+    MaterialTheme {
+        PremiumScreen(onClose = {})
     }
 }

@@ -217,6 +217,8 @@
                         android:id="@+id/et_gender"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clickable="true"
+                        android:focusable="false"
                         android:inputType="text" />
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -251,6 +253,8 @@
                         android:id="@+id/et_country"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clickable="true"
+                        android:focusable="false"
                         android:inputType="text" />
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -267,6 +271,8 @@
                         android:id="@+id/et_state"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clickable="true"
+                        android:focusable="false"
                         android:inputType="text" />
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -283,6 +289,8 @@
                         android:id="@+id/et_city"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clickable="true"
+                        android:focusable="false"
                         android:inputType="text" />
                 </com.google.android.material.textfield.TextInputLayout>
 
@@ -299,6 +307,26 @@
                         android:id="@+id/et_language"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clickable="true"
+                        android:focusable="false"
+                        android:inputType="text" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:hint="Interests"
+                    app:boxStrokeColor="#FF1493"
+                    app:hintTextColor="#FF1493">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_interests"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clickable="true"
+                        android:focusable="false"
                         android:inputType="text" />
                 </com.google.android.material.textfield.TextInputLayout>
 

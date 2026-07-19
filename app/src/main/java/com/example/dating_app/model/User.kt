@@ -32,6 +32,7 @@ data class User(
     val occupation: String = "",
     val looking_for: String = "",
     val interests: List<String> = emptyList(),
+    val is_premium: Boolean = false,
     val likes: Int = 0,
     val matches: Int = 0,
     val photos_count: Int = 0,

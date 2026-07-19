@@ -64,6 +64,7 @@ dependencies {
     implementation("io.coil-kt:coil-video:2.6.0")
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.play.services.location)
 
     // Firebase
     implementation(platform(libs.firebase.bom))

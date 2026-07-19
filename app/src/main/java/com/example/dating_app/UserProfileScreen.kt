@@ -522,32 +522,81 @@ fun EditProfileView(user: User, onSave: (User) -> Unit, onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // Looking For Field
-            EditProfileField(label = "Looking for", value = lookingFor, onValueChange = { lookingFor = it }, placeholder = "Serious Relationship, Open to Chat")
+            val goalOptions = listOf("Serious Relationship", "Casual Dating", "Friendship", "Marriage")
+            EditProfileField(
+                label = "Looking for",
+                value = lookingFor,
+                onValueChange = { lookingFor = it },
+                placeholder = "Select your goal",
+                isSelection = true,
+                options = goalOptions
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Language Field
-            EditProfileField(label = "Language", value = language, onValueChange = { language = it }, placeholder = "English, Spanish")
+            val languageOptions = listOf("English", "Spanish", "Hindi", "French", "German", "Chinese", "Tamil")
+            EditProfileField(
+                label = "Language",
+                value = language,
+                onValueChange = { language = it },
+                placeholder = "Select Language",
+                isSelection = true,
+                options = languageOptions
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Country Field
-            EditProfileField(label = "Country", value = country, onValueChange = { country = it }, placeholder = "USA")
+            val countryOptions = listOf("USA", "UK", "India", "Canada", "Australia", "Germany", "France")
+            EditProfileField(
+                label = "Country",
+                value = country,
+                onValueChange = { country = it },
+                placeholder = "Select Country",
+                isSelection = true,
+                options = countryOptions
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // State Field
-            EditProfileField(label = "State", value = state, onValueChange = { state = it }, placeholder = "New York")
+            val stateOptions = listOf("California", "New York", "Texas", "Maharashtra", "Tamilnadu", "Delhi", "Ontario")
+            EditProfileField(
+                label = "State",
+                value = state,
+                onValueChange = { state = it },
+                placeholder = "Select State",
+                isSelection = true,
+                options = stateOptions
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // City Field
-            EditProfileField(label = "City", value = city, onValueChange = { city = it }, placeholder = "Los Angeles")
+            val cityOptions = listOf("New York", "London", "Mumbai", "Paris", "Tokyo", "Chennai", "Los Angeles")
+            EditProfileField(
+                label = "City",
+                value = city,
+                onValueChange = { city = it },
+                placeholder = "Select City",
+                isSelection = true,
+                options = cityOptions
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Interests Field
-            EditProfileField(label = "Interests", value = interests, onValueChange = { interests = it }, placeholder = "Travel, Music, Photography")
+            val interestOptions = listOf("Travel", "Music", "Movies", "Sports", "Food", "Reading", "Fitness", "Art")
+            EditProfileField(
+                label = "Interests",
+                value = interests,
+                onValueChange = { interests = it },
+                placeholder = "Select Interests",
+                isSelection = true,
+                isMultiSelect = true,
+                options = interestOptions
+            )
 
             Spacer(modifier = Modifier.height(40.dp))
         }
@@ -576,8 +625,71 @@ fun EditProfileField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
-    minHeight: androidx.compose.ui.unit.Dp = 0.dp
+    minHeight: androidx.compose.ui.unit.Dp = 0.dp,
+    isSelection: Boolean = false,
+    isMultiSelect: Boolean = false,
+    options: List<String> = emptyList()
 ) {
+    var showDialog by remember { mutableStateOf(false) }
+    val selectedOptions = remember(value) { 
+        if (isMultiSelect) value.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableStateList()
+        else mutableStateListOf<String>()
+    }
+
+    if (showDialog && options.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Select $label") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    options.forEach { option ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (isMultiSelect) {
+                                        if (selectedOptions.contains(option)) selectedOptions.remove(option)
+                                        else selectedOptions.add(option)
+                                    } else {
+                                        onValueChange(option)
+                                        showDialog = false
+                                    }
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (isMultiSelect) {
+                                Checkbox(
+                                    checked = selectedOptions.contains(option),
+                                    onCheckedChange = null // Handled by row click
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text(text = option, fontSize = 16.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { 
+                    if (isMultiSelect) {
+                        onValueChange(selectedOptions.joinToString(", "))
+                    }
+                    showDialog = false 
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                if (!isMultiSelect) {
+                    TextButton(onClick = { showDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(text = label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         Spacer(modifier = Modifier.height(8.dp))
@@ -585,18 +697,27 @@ fun EditProfileField(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp))
+                .clickable(enabled = isSelection) { showDialog = true }
                 .padding(16.dp)
         ) {
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (minHeight > 0.dp) Modifier.heightIn(min = minHeight) else Modifier),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Black)
-            )
-            if (value.isEmpty()) {
-                Text(placeholder, color = Color.Gray)
+            if (isSelection) {
+                Text(
+                    text = if (value.isNotEmpty()) value else placeholder,
+                    color = if (value.isNotEmpty()) Color.Black else Color.Gray,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (minHeight > 0.dp) Modifier.heightIn(min = minHeight) else Modifier),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Black)
+                )
+                if (value.isEmpty()) {
+                    Text(placeholder, color = Color.Gray)
+                }
             }
         }
     }

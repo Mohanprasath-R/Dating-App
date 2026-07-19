@@ -1,7 +1,9 @@
 package com.example.dating_app
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.DatePickerDialog
+import android.content.DialogInterface
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -39,6 +41,7 @@ class EditProfileActivity : AppCompatActivity() {
     private lateinit var etState: TextInputEditText
     private lateinit var etCity: TextInputEditText
     private lateinit var etLanguage: TextInputEditText
+    private lateinit var etInterests: TextInputEditText
     private lateinit var etTimezone: TextInputEditText
     private lateinit var ivProfile: ImageView
     private lateinit var ivCover: ImageView
@@ -48,6 +51,15 @@ class EditProfileActivity : AppCompatActivity() {
     private val auth = FirebaseAuth.getInstance()
     private var selectedImageUri: Uri? = null
     private var selectedCoverUri: Uri? = null
+    
+    // Lists for selection
+    private val countryList = arrayOf("USA", "UK", "India", "Canada", "Australia", "Germany", "France")
+    private val languageList = arrayOf("English", "Spanish", "Hindi", "French", "German", "Chinese")
+    private val genderList = arrayOf("Male", "Female", "Other")
+    private val stateList = arrayOf("California", "New York", "Texas", "Maharashtra", "Delhi", "London", "Ontario")
+    private val cityList = arrayOf("New York", "London", "Mumbai", "Paris", "Tokyo", "Los Angeles", "Chicago")
+    private val interestOptions = arrayOf("Travel", "Music", "Movies", "Sports", "Food", "Reading", "Fitness", "Art", "Dancing", "Photography")
+    private val selectedInterestsList = mutableListOf<String>()
 
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
@@ -96,6 +108,46 @@ class EditProfileActivity : AppCompatActivity() {
                 etDob.setText(date)
             }, year, month, day).show()
         }
+
+        etGender.setOnClickListener { showSelectionDialog("Select Gender", genderList) { etGender.setText(it) } }
+        etCountry.setOnClickListener { showSelectionDialog("Select Country", countryList) { etCountry.setText(it) } }
+        etState.setOnClickListener { showSelectionDialog("Select State", stateList) { etState.setText(it) } }
+        etCity.setOnClickListener { showSelectionDialog("Select City", cityList) { etCity.setText(it) } }
+        etLanguage.setOnClickListener { showSelectionDialog("Select Language", languageList) { etLanguage.setText(it) } }
+        etInterests.setOnClickListener { showInterestsDialog() }
+    }
+
+    private fun showInterestsDialog() {
+        val checkedItems = BooleanArray(interestOptions.size) { i -> 
+            selectedInterestsList.contains(interestOptions[i])
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Select Interests")
+            .setMultiChoiceItems(interestOptions, checkedItems) { _, which, isChecked ->
+                if (isChecked) {
+                    if (!selectedInterestsList.contains(interestOptions[which])) {
+                        selectedInterestsList.add(interestOptions[which])
+                    }
+                } else {
+                    selectedInterestsList.remove(interestOptions[which])
+                }
+            }
+            .setPositiveButton("OK") { _, _ ->
+                etInterests.setText(selectedInterestsList.joinToString(", "))
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showSelectionDialog(title: String, options: Array<String>, onSelect: (String) -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setItems(options) { dialog, which ->
+                onSelect(options[which])
+                dialog.dismiss()
+            }
+            .show()
     }
 
     private fun initViews() {
@@ -106,11 +158,31 @@ class EditProfileActivity : AppCompatActivity() {
         etPhone = findViewById(R.id.et_phone)
         etBio = findViewById(R.id.et_bio)
         etGender = findViewById(R.id.et_gender)
+        etGender.isFocusable = false
+        etGender.isClickable = true
+        
         etDob = findViewById(R.id.et_dob)
+        
         etCountry = findViewById(R.id.et_country)
+        etCountry.isFocusable = false
+        etCountry.isClickable = true
+        
         etState = findViewById(R.id.et_state)
+        etState.isFocusable = false
+        etState.isClickable = true
+        
         etCity = findViewById(R.id.et_city)
+        etCity.isFocusable = false
+        etCity.isClickable = true
+        
         etLanguage = findViewById(R.id.et_language)
+        etLanguage.isFocusable = false
+        etLanguage.isClickable = true
+
+        etInterests = findViewById(R.id.et_interests)
+        etInterests.isFocusable = false
+        etInterests.isClickable = true
+
         etTimezone = findViewById(R.id.et_timezone)
         ivProfile = findViewById(R.id.edit_profile_image)
         ivCover = findViewById(R.id.edit_cover_image)
@@ -138,6 +210,11 @@ class EditProfileActivity : AppCompatActivity() {
                     etCity.setText(it.city)
                     etLanguage.setText(it.language)
                     etTimezone.setText(it.timezone)
+                    
+                    // Load interests
+                    selectedInterestsList.clear()
+                    selectedInterestsList.addAll(it.interests)
+                    etInterests.setText(it.interests.joinToString(", "))
                     
                     if (it.profile_image.isNotEmpty()) {
                         ivProfile.load(it.profile_image) {
@@ -174,6 +251,7 @@ class EditProfileActivity : AppCompatActivity() {
                     "city" to etCity.text.toString(),
                     "language" to etLanguage.text.toString(),
                     "timezone" to etTimezone.text.toString(),
+                    "interests" to selectedInterestsList,
                     "updated_at" to System.currentTimeMillis()
                 )
 

@@ -484,10 +484,44 @@ fun DetailsSlide(
 
         DetailField(value = email, onValueChange = onEmailChange, label = "Email Address", icon = Icons.Default.Email)
         DetailField(value = phone, onValueChange = onPhoneChange, label = "Phone Number", icon = Icons.Default.Phone, keyboardType = KeyboardType.Phone)
-        DetailField(value = country, onValueChange = onCountryChange, label = "Country", icon = Icons.Default.Public, isDropdown = true)
-        DetailField(value = state, onValueChange = onStateChange, label = "State / Province", icon = Icons.Default.LocationCity, isDropdown = true)
-        DetailField(value = city, onValueChange = onCityChange, label = "City", icon = Icons.Default.LocationOn)
-        DetailField(value = languages, onValueChange = onLanguagesChange, label = "Languages", icon = Icons.Default.Translate, isDropdown = true)
+        
+        val countryList = listOf("USA", "UK", "India", "Canada", "Australia", "Germany", "France")
+        val languageList = listOf("English", "Spanish", "Hindi", "French", "German", "Chinese")
+        val stateList = listOf("California", "New York", "Texas", "Maharashtra", "Delhi", "London", "Ontario")
+        val cityList = listOf("New York", "London", "Mumbai", "Paris", "Tokyo", "Los Angeles", "Chicago")
+
+        DetailField(
+            value = country,
+            onValueChange = onCountryChange,
+            label = "Country",
+            icon = Icons.Default.Public,
+            isDropdown = true,
+            options = countryList
+        )
+        DetailField(
+            value = state,
+            onValueChange = onStateChange,
+            label = "State / Province",
+            icon = Icons.Default.LocationCity,
+            isDropdown = true,
+            options = stateList
+        )
+        DetailField(
+            value = city,
+            onValueChange = onCityChange,
+            label = "City",
+            icon = Icons.Default.LocationOn,
+            isDropdown = true,
+            options = cityList
+        )
+        DetailField(
+            value = languages,
+            onValueChange = onLanguagesChange,
+            label = "Languages",
+            icon = Icons.Default.Translate,
+            isDropdown = true,
+            options = languageList
+        )
     }
 }
 
@@ -562,24 +596,66 @@ fun DetailField(
     label: String,
     icon: ImageVector,
     isDropdown: Boolean = false,
+    options: List<String> = emptyList(),
     keyboardType: KeyboardType = KeyboardType.Text
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 16.dp),
-        label = { Text(label) },
-        leadingIcon = { Icon(icon, contentDescription = null, tint = Color(0xFFFE3C72)) },
-        trailingIcon = { if (isDropdown) Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) },
-        shape = RoundedCornerShape(16.dp),
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Color(0xFFFE3C72),
-            unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f)
+    var showDialog by remember { mutableStateOf(false) }
+
+    if (showDialog && options.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Select $label") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    options.forEach { option ->
+                        Text(
+                            text = option,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onValueChange(option)
+                                    showDialog = false
+                                }
+                                .padding(16.dp),
+                            fontSize = 16.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
-    )
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = { if (!isDropdown) onValueChange(it) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            label = { Text(label) },
+            leadingIcon = { Icon(icon, contentDescription = null, tint = Color(0xFFFE3C72)) },
+            trailingIcon = { if (isDropdown) Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) },
+            shape = RoundedCornerShape(16.dp),
+            readOnly = isDropdown,
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFFFE3C72),
+                unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f)
+            )
+        )
+        if (isDropdown) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable { showDialog = true }
+            )
+        }
+    }
 }
 
 @Composable

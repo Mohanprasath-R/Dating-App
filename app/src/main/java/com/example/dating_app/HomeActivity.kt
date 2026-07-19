@@ -625,10 +625,16 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
 
 sealed class AstrologyMessage {
     data class Text(val sender: String, val content: String) : AstrologyMessage()
-    data class ProfileMatch(val matchedUser: User) : AstrologyMessage()
+    data class ProfileMatch(val matchedUsers: List<User>) : AstrologyMessage()
 }
 
-enum class MatchFlowState { IDLE, WAITING_FOR_CITY, WAITING_FOR_AGE }
+enum class MatchFlowState { 
+    IDLE, 
+    WAITING_FOR_CITY, 
+    WAITING_FOR_AGE, 
+    WAITING_FOR_GOAL, 
+    WAITING_FOR_PREFERENCES 
+}
 
 @Composable
 fun AstrologyModal(user: User?, onChatClick: (String, String) -> Unit, onDismiss: () -> Unit) {
@@ -660,14 +666,21 @@ fun AstrologyChatView(
     
     var matchFlowState by remember { mutableStateOf(MatchFlowState.IDLE) }
     var preferredCity by remember { mutableStateOf("") }
+    var preferredAgeRange by remember { mutableStateOf("") }
+    var preferredGoal by remember { mutableStateOf("") }
     
     val userCity = user?.city?.takeIf { it.isNotBlank() } ?: "this realm"
-    val suggestions = listOf("Find my match", "Daily horoscope", "My zodiac sign", "Who am I?")
+    val suggestions = listOf("Find my match", "Daily horoscope", "Compatibility", "Relationship advice")
+    
+    val cityOptions = listOf("Chennai", "Mumbai", "Delhi", "Bangalore", "New York", "London", "Other")
+    val ageOptions = listOf("18-24", "25-30", "31-40", "41-50", "50+")
+    val goalOptions = listOf("Serious Relationship", "Casual Dating", "Friendship", "Marriage")
+    val interestOptions = listOf("Travel", "Music", "Movies", "Sports", "Food", "Reading", "Fitness", "Art", "Dancing", "Photography")
     
     var messages by remember { 
         val name = user?.first_name ?: "Seeker"
         mutableStateOf(listOf<AstrologyMessage>(
-            AstrologyMessage.Text("Astrologer", "Hi $name! I'm your AI guide. I see you're in $userCity. Want to find your perfect match or see your daily horoscope?")
+            AstrologyMessage.Text("Astrologer", "Welcome, $name. I am your Celestial Guide. 🌙\n\nI see you are in $userCity, where the stars are currently aligned in your favor. Would you like to seek a new connection, or shall we explore the wisdom of the cosmos today?")
         )) 
     }
     var inputText by remember { mutableStateOf("") }
@@ -679,12 +692,13 @@ fun AstrologyChatView(
             messages = messages + AstrologyMessage.Text("User", text)
             scope.launch {
                 scrollState.animateScrollToItem(messages.size - 1)
-                delay(1000)
+                delay(1200)
                 
                 when (matchFlowState) {
                     MatchFlowState.IDLE -> {
-                        if (text.lowercase().contains("match") || text.lowercase().contains("someone")) {
-                            messages = messages + AstrologyMessage.Text("Astrologer", "Which city are you looking for?")
+                        val input = text.lowercase()
+                        if (listOf("match", "girlfriend", "boyfriend", "someone", "love", "partner").any { input.contains(it) }) {
+                            messages = messages + AstrologyMessage.Text("Astrologer", "I would be honored to help you find a companion. To begin our search, in which city shall we look for your match?")
                             matchFlowState = MatchFlowState.WAITING_FOR_CITY
                         } else {
                             val aiResponse = getAstrologyResponse(text, user, potentialMatches)
@@ -693,24 +707,61 @@ fun AstrologyChatView(
                     }
                     MatchFlowState.WAITING_FOR_CITY -> {
                         preferredCity = text
-                        messages = messages + AstrologyMessage.Text("Astrologer", "Got it! And what is the preferred age?")
+                        messages = messages + AstrologyMessage.Text("Astrologer", "A wonderful choice. And what age range feels right for this connection?")
                         matchFlowState = MatchFlowState.WAITING_FOR_AGE
                     }
                     MatchFlowState.WAITING_FOR_AGE -> {
-                        val preferredAge = text.toIntOrNull()
+                        preferredAgeRange = text
+                        if (user?.looking_for.isNullOrBlank()) {
+                            messages = messages + AstrologyMessage.Text("Astrologer", "Understood. Tell me, what is your relationship goal? Are you seeking something serious, or perhaps a casual connection?")
+                            matchFlowState = MatchFlowState.WAITING_FOR_GOAL
+                        } else {
+                            messages = messages + AstrologyMessage.Text("Astrologer", "Lastly, are there any other preferences? (Religion, education, hobbies, or simply type 'none' to proceed)")
+                            matchFlowState = MatchFlowState.WAITING_FOR_PREFERENCES
+                        }
+                    }
+                    MatchFlowState.WAITING_FOR_GOAL -> {
+                        preferredGoal = text
+                        messages = messages + AstrologyMessage.Text("Astrologer", "Thank you for sharing that. Are there any other specific preferences like hobbies or lifestyle choices I should consider?")
+                        matchFlowState = MatchFlowState.WAITING_FOR_PREFERENCES
+                    }
+                    MatchFlowState.WAITING_FOR_PREFERENCES -> {
                         matchFlowState = MatchFlowState.IDLE
+                        messages = messages + AstrologyMessage.Text("Astrologer", "The stars are shifting... I am scanning the horizons for your match. Please wait a moment.")
+                        delay(2000)
                         
-                        val filtered = potentialMatches.filter { 
-                            (preferredCity.isEmpty() || it.city.contains(preferredCity, ignoreCase = true)) &&
-                            (preferredAge == null || getAgeFromDob(it.dob) == preferredAge)
+                        // Try strict filtering first (City + Age + Gender)
+                        var filtered = potentialMatches.filter { 
+                            val cityMatch = preferredCity.isEmpty() || it.city.contains(preferredCity, ignoreCase = true) || preferredCity.contains(it.city, ignoreCase = true)
+                            val age = getAgeFromDob(it.dob)
+                            val ageMatch = when (preferredAgeRange) {
+                                "18-24" -> age in 18..24
+                                "25-30" -> age in 25..30
+                                "31-40" -> age in 31..40
+                                "41-50" -> age in 41..50
+                                "50+" -> age >= 50
+                                else -> true
+                            }
+                            cityMatch && ageMatch
+                        }
+                        
+                        // If no matches, relax the city constraint
+                        if (filtered.isEmpty()) {
+                            filtered = potentialMatches.filter { it.city.isNotEmpty() || preferredCity.isEmpty() }
+                        }
+                        
+                        // If STILL no matches, just pick from potentialMatches (which handles gender/blocked)
+                        if (filtered.isEmpty() && potentialMatches.isNotEmpty()) {
+                            filtered = potentialMatches
                         }
                         
                         if (filtered.isNotEmpty()) {
-                            val matched = filtered.random()
-                            messages = messages + AstrologyMessage.Text("Astrologer", "The stars have aligned! Here is your match:")
-                            messages = messages + AstrologyMessage.ProfileMatch(matched)
+                            // Show up to 3 matches if available
+                            val matchedList = filtered.shuffled().take(3)
+                            messages = messages + AstrologyMessage.Text("Astrologer", "The stars have revealed multiple paths that resonate with yours. 🌟")
+                            messages = messages + AstrologyMessage.ProfileMatch(matchedList)
                         } else {
-                            messages = messages + AstrologyMessage.Text("Astrologer", "I couldn't find a perfect match for that city and age right now. Try another search!")
+                            messages = messages + AstrologyMessage.Text("Astrologer", "I couldn't find someone matching all of your preferences right now. You could expand the age range or nearby cities, or I can notify you when someone compatible joins.")
                         }
                     }
                 }
@@ -753,6 +804,33 @@ fun AstrologyChatView(
                 potentialMatches = allUsers.filter { it.id != currentUser.id && it.id !in likedIds && it.id !in dislikedIds }
             }
         }
+    }
+
+    val context = LocalContext.current
+    var showPremiumDialog by remember { mutableStateOf(false) }
+
+    if (showPremiumDialog) {
+        AlertDialog(
+            onDismissRequest = { showPremiumDialog = false },
+            title = { Text("Premium Feature") },
+            text = { Text("Chatting with your cosmic matches is a premium feature. Upgrade to explore your destiny!") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPremiumDialog = false
+                        context.startActivity(Intent(context, PremiumActivity::class.java))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1493))
+                ) {
+                    Text("Get Premium")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPremiumDialog = false }) {
+                    Text("Maybe later")
+                }
+            }
+        )
     }
 
     Column(
@@ -805,20 +883,28 @@ fun AstrologyChatView(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.LightGray.copy(alpha = 0.5f))
 
-        // Suggestion Chips
+        // Context-aware Buttons based on Flow State
+        val flowButtons = when (matchFlowState) {
+            MatchFlowState.IDLE -> suggestions
+            MatchFlowState.WAITING_FOR_CITY -> cityOptions
+            MatchFlowState.WAITING_FOR_AGE -> ageOptions
+            MatchFlowState.WAITING_FOR_GOAL -> goalOptions
+            MatchFlowState.WAITING_FOR_PREFERENCES -> interestOptions
+        }
+
         LazyRow(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(suggestions) { suggestion ->
+            items(flowButtons) { buttonLabel ->
                 Surface(
-                    onClick = { sendMessage(suggestion) },
+                    onClick = { sendMessage(buttonLabel) },
                     color = Color(0xFFFF1493).copy(alpha = 0.1f),
                     shape = RoundedCornerShape(16.dp),
                     border = BorderStroke(1.dp, Color(0xFFFF1493).copy(alpha = 0.3f))
                 ) {
                     Text(
-                        text = suggestion,
+                        text = buttonLabel,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         fontSize = 12.sp,
                         color = Color(0xFFFF1493),
@@ -865,48 +951,71 @@ fun AstrologyChatView(
                         }
                     }
                     is AstrologyMessage.ProfileMatch -> {
-                        val match = message.matchedUser
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F8F8)),
-                            border = BorderStroke(1.dp, Color(0xFFFF1493).copy(alpha = 0.2f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                        val matches = message.matchedUsers
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                AsyncImage(
-                                    model = if (match.profile_image.isNotEmpty()) match.profile_image else R.drawable.girl,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(60.dp).clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "${match.first_name}, ${getAgeFromDob(match.dob)}",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp
-                                    )
-                                    Text(
-                                        text = match.city,
-                                        fontSize = 12.sp,
-                                        color = Color.Gray
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { 
-                                        onChatClick(match.first_name, match.id)
-                                        onDismiss?.invoke()
-                                    },
-                                    colors = IconButtonDefaults.iconButtonColors(
-                                        containerColor = Color(0xFFFF1493),
-                                        contentColor = Color.White
-                                    ),
-                                    modifier = Modifier.size(40.dp)
-                                ) {
-                                    Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", modifier = Modifier.size(20.dp))
+                                items(matches) { match ->
+                                    val score = (75..98).random()
+                                    Card(
+                                        modifier = Modifier.width(280.dp),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F8F8)),
+                                        border = BorderStroke(1.dp, Color(0xFFFF1493).copy(alpha = 0.2f))
+                                    ) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                AsyncImage(
+                                                    model = if (match.profile_image.isNotEmpty()) match.profile_image else R.drawable.girl,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(60.dp).clip(CircleShape),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "${match.first_name}, ${getAgeFromDob(match.dob)}",
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 18.sp
+                                                    )
+                                                    Text(
+                                                        text = "✨ Compatibility: $score%",
+                                                        color = Color(0xFFFF1493),
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontSize = 14.sp
+                                                    )
+                                                }
+                                                IconButton(
+                                                    onClick = { 
+                                                        if (user?.is_premium == true) {
+                                                            onChatClick(match.first_name, match.id)
+                                                            onDismiss?.invoke()
+                                                        } else {
+                                                            showPremiumDialog = true
+                                                        }
+                                                    },
+                                                    colors = IconButtonDefaults.iconButtonColors(
+                                                        containerColor = Color(0xFFFF1493),
+                                                        contentColor = Color.White
+                                                    ),
+                                                    modifier = Modifier.size(40.dp)
+                                                ) {
+                                                    Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", modifier = Modifier.size(20.dp))
+                                                }
+                                            }
+                                            
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text("✨ Why You Match", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                            Text("The stars suggest your personalities naturally balance one another. Your shared interest in ${match.interests.firstOrNull() ?: "connection"} creates a strong cosmic bond.", fontSize = 13.sp, color = Color.DarkGray)
+                                            
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text("💌 Icebreakers", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                            Text("• \"I see you love ${match.interests.firstOrNull() ?: "exploring"}, what's your favorite spot?\"", fontSize = 13.sp, color = Color.DarkGray)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -964,35 +1073,28 @@ fun getAgeFromDob(dob: String): Int {
 fun getAstrologyResponse(userInput: String, user: User?, matches: List<User>): String {
     val input = userInput.lowercase()
     val name = user?.first_name ?: "Seeker"
-    val city = user?.city?.takeIf { it.isNotBlank() } ?: "your city"
     val zodiac = user?.dob?.let { getZodiacSign(it) } ?: "unknown sign"
 
     return when {
-        input.contains("hello") || input.contains("hi") -> 
-            "Hi $name! How can I help you today? Ask about your match or horoscope."
+        input.contains("hello") || input.contains("hi") || input.contains("welcome") -> 
+            "Greetings, $name. I am your Celestial Guide. How may I assist your heart's journey today?"
         
-        input.contains("love") || input.contains("match") || input.contains("find") || input.contains("someone") || input.contains("yes") || input.contains("another") -> {
-            if (matches.isNotEmpty()) {
-                val match = matches.random()
-                val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-                val birthYear = match.dob.split("/").lastOrNull()?.toIntOrNull() ?: 2000
-                val age = currentYear - birthYear
-                "I found ${match.first_name}, $age from ${match.city}. You both are a great match! Want to see another?"
-            } else {
-                "I couldn't find a match right now. Try updating your profile or checking back later!"
-            }
-        }
+        input.contains("horoscope") || input.contains("today") || input.contains("energy") -> 
+            "🌙 Celestial Insight\n\n✨ Today's Energy\n★★★★☆\n\n❤️ Love\nA meaningful conversation could strengthen an existing connection. Based on your $zodiac nature, today favors honest expression.\n\n🌟 Lucky Color\nEmerald Green\n\n💬 Cosmic Advice\nSometimes the smallest message starts the biggest story."
 
-        input.contains("horoscope") || input.contains("today") || input.contains("day") -> 
-            "Your stars look good today! It's a great day for new beginnings. Anything else?"
+        input.contains("compatibility") ->
+            "Compatibility is a dance of elements. As a $zodiac, you often find deep resonance with water and earth signs, who offer the stability or emotional depth you seek. Shall we look for such a match?"
         
         input.contains("zodiac") || input.contains("sign") ->
-            "You are a $zodiac. It's a very powerful sign! Want to know about your matches?"
+            "Your sign, $zodiac, speaks of unique strengths. Astrology suggests your communication style is intuitive and your love language often centers on quality time and deep connection. Would you like to know more about your personality traits?"
         
-        input.contains("who am i") ->
-            "You are $name, a $zodiac from $city. What would you like to ask me?"
+        input.contains("who am i") || input.contains("profile") ->
+            "You are $name, a wise $zodiac from ${user?.city ?: "the stars"}. Your passion for ${user?.interests?.firstOrNull() ?: "life"} and your role as a ${user?.occupation ?: "seeker"} make you a truly unique soul in this cosmic dating pool."
+        
+        input.contains("advice") || input.contains("coach") ->
+            "The stars suggest that when starting a conversation, curiosity is your greatest ally. Try asking about a dream they haven't shared yet, or their favorite way to find peace in a busy world."
 
-        else -> "I'm not sure I understand. Type 'match', 'horoscope' or 'zodiac'!"
+        else -> "I hear your words, but the cosmic patterns are unclear. Would you like a 'daily horoscope', to 'find a match', or perhaps 'compatibility' advice?"
     }
 }
 

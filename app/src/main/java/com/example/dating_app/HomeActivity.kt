@@ -1605,15 +1605,76 @@ fun ConnectRoomItem(user: User, modifier: Modifier = Modifier, onClick: () -> Un
 }
 @Composable
 fun FloatingHeartsBackground() {
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Test: Only show one very small blue heart to confirm if this is the right place
-        Icon(
-            imageVector = Icons.Default.Favorite,
-            contentDescription = null,
-            tint = Color.Blue,
-            modifier = Modifier.size(20.dp).align(Alignment.Center)
-        )
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    val screenHeight = configuration.screenHeightDp.dp
+    
+    val hearts = remember {
+        List(50) {
+            HeartData(
+                xPosition = (0..100).random().toFloat() / 100f * screenWidth.value,
+                size = (6..14).random().dp,
+                duration = (5000..10000).random(),
+                delay = (0..8000).random()
+            )
+        }
     }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        hearts.forEach { heart ->
+            FloatingHeart(heart, screenHeight)
+        }
+    }
+}
+
+data class HeartData(
+    val xPosition: Float,
+    val size: androidx.compose.ui.unit.Dp,
+    val duration: Int,
+    val delay: Int
+)
+
+@Composable
+fun FloatingHeart(data: HeartData, screenHeight: androidx.compose.ui.unit.Dp) {
+    val infiniteTransition = rememberInfiniteTransition(label = "heartTransition")
+    
+    val yProgress by infiniteTransition.animateFloat(
+        initialValue = 1.1f,
+        targetValue = -0.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(data.duration, data.delay, LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "yPosition"
+    )
+
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = data.duration
+                0f at 0
+                0.8f at (data.duration * 0.2).toInt()
+                0.8f at (data.duration * 0.8).toInt()
+                0f at data.duration
+            },
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "alpha"
+    )
+
+    Icon(
+        imageVector = Icons.Default.Favorite,
+        contentDescription = null,
+        tint = Color.White.copy(alpha = alpha),
+        modifier = Modifier
+            .offset(
+                x = data.xPosition.dp,
+                y = screenHeight * yProgress
+            )
+            .size(data.size)
+    )
 }
 @Composable
 fun NotificationsScreen() {

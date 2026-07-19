@@ -216,14 +216,14 @@ class FirebaseRepository {
 
     suspend fun getAllUsers(excludeUserId: String? = null): Result<List<User>> {
         return try {
-            val snapshot = usersCollection.get().await()
-            val users = snapshot.toObjects(User::class.java)
-            val filteredUsers = if (excludeUserId != null) {
-                users.filter { it.id != excludeUserId }
+            val snapshot = if (excludeUserId != null) {
+                // Note: Not ideal for very large datasets, but better than fetching all and filtering in memory if we use pagination
+                // For now, let's keep it simple but avoid the in-memory filter if possible
+                usersCollection.whereNotEqualTo("id", excludeUserId).get().await()
             } else {
-                users
+                usersCollection.get().await()
             }
-            Result.success(filteredUsers)
+            Result.success(snapshot.toObjects(User::class.java))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -267,9 +267,11 @@ class FirebaseRepository {
                 return Result.success(emptyList())
             }
 
-            val usersSnapshot = usersCollection.get().await()
-            val allUsers = usersSnapshot.toObjects(User::class.java)
-            val likedUsers = allUsers.filter { it.id in likedUserIds }
+            val likedUsers = mutableListOf<User>()
+            for (batch in likedUserIds.chunked(30)) {
+                val usersSnapshot = usersCollection.whereIn("id", batch).get().await()
+                likedUsers.addAll(usersSnapshot.toObjects(User::class.java))
+            }
             
             Result.success(likedUsers)
         } catch (e: Exception) {
@@ -279,17 +281,28 @@ class FirebaseRepository {
 
     suspend fun getLikedByUsers(userId: String): Result<List<User>> {
         return try {
+            // Fetch blocked users first to filter
+            val blockedSnapshot = firestore.collection("blocked_users")
+                .whereEqualTo("blockerId", userId)
+                .get()
+                .await()
+            val blockedIds = blockedSnapshot.documents.mapNotNull { it.getString("blockedId") }.toSet()
+
             val snapshot = firestore.collection("liked_profiles")
                 .whereEqualTo("toUserId", userId)
                 .get()
                 .await()
             
             val likerIds = snapshot.documents.mapNotNull { it.getString("fromUserId") }
+                .filter { it !in blockedIds }
+            
             if (likerIds.isEmpty()) return Result.success(emptyList())
 
-            val usersSnapshot = usersCollection.get().await()
-            val allUsers = usersSnapshot.toObjects(User::class.java)
-            val likers = allUsers.filter { it.id in likerIds }
+            val likers = mutableListOf<User>()
+            for (batch in likerIds.chunked(30)) {
+                val usersSnapshot = usersCollection.whereIn("id", batch).get().await()
+                likers.addAll(usersSnapshot.toObjects(User::class.java))
+            }
             
             Result.success(likers)
         } catch (e: Exception) {
@@ -299,27 +312,38 @@ class FirebaseRepository {
 
     suspend fun getMatches(userId: String): Result<List<User>> {
         return try {
+            // 0. Get blocked users
+            val blockedSnapshot = firestore.collection("blocked_users")
+                .whereEqualTo("blockerId", userId)
+                .get()
+                .await()
+            val blockedIds = blockedSnapshot.documents.mapNotNull { it.getString("blockedId") }.toSet()
+
             // 1. Get profiles I liked
             val myLikesSnapshot = firestore.collection("liked_profiles")
                 .whereEqualTo("fromUserId", userId)
                 .get()
                 .await()
-            val myLikedIds = myLikesSnapshot.documents.mapNotNull { it.getString("toUserId") }.toSet()
+            val myLikedIds = myLikesSnapshot.documents.mapNotNull { it.getString("toUserId") }
+                .filter { it !in blockedIds }.toSet()
 
             // 2. Get profiles who liked me
             val theyLikedMeSnapshot = firestore.collection("liked_profiles")
                 .whereEqualTo("toUserId", userId)
                 .get()
                 .await()
-            val theyLikedMeIds = theyLikedMeSnapshot.documents.mapNotNull { it.getString("fromUserId") }.toSet()
+            val theyLikedMeIds = theyLikedMeSnapshot.documents.mapNotNull { it.getString("fromUserId") }
+                .filter { it !in blockedIds }.toSet()
 
             // 3. Find mutual likes
             val mutualIds = myLikedIds.intersect(theyLikedMeIds)
             if (mutualIds.isEmpty()) return Result.success(emptyList())
 
-            val usersSnapshot = usersCollection.get().await()
-            val allUsers = usersSnapshot.toObjects(User::class.java)
-            val matches = allUsers.filter { it.id in mutualIds }
+            val matches = mutableListOf<User>()
+            for (batch in mutualIds.chunked(30)) {
+                val usersSnapshot = usersCollection.whereIn("id", batch.toList()).get().await()
+                matches.addAll(usersSnapshot.toObjects(User::class.java))
+            }
             
             Result.success(matches)
         } catch (e: Exception) {
@@ -420,6 +444,46 @@ class FirebaseRepository {
                 trySend(filteredMessages)
             }
         awaitClose { subscription.remove() }
+    }
+
+    suspend fun getPendingRequests(userId: String): Result<List<User>> {
+        return try {
+            // 1. Get blocked users
+            val blockedSnapshot = firestore.collection("blocked_users")
+                .whereEqualTo("blockerId", userId)
+                .get()
+                .await()
+            val blockedIds = blockedSnapshot.documents.mapNotNull { it.getString("blockedId") }.toSet()
+
+            // 2. Get profiles I already liked (matched or pending my side)
+            val myLikesSnapshot = firestore.collection("liked_profiles")
+                .whereEqualTo("fromUserId", userId)
+                .get()
+                .await()
+            val myLikedIds = myLikesSnapshot.documents.mapNotNull { it.getString("toUserId") }.toSet()
+
+            // 3. Get profiles who liked me
+            val theyLikedMeSnapshot = firestore.collection("liked_profiles")
+                .whereEqualTo("toUserId", userId)
+                .get()
+                .await()
+            
+            // Pending Requests = People who liked me, BUT I haven't liked back AND I haven't blocked
+            val pendingIds = theyLikedMeSnapshot.documents.mapNotNull { it.getString("fromUserId") }
+                .filter { it !in blockedIds && it !in myLikedIds }
+            
+            if (pendingIds.isEmpty()) return Result.success(emptyList())
+
+            val usersList = mutableListOf<User>()
+            for (batch in pendingIds.chunked(30)) {
+                val usersSnapshot = usersCollection.whereIn("id", batch).get().await()
+                usersList.addAll(usersSnapshot.toObjects(User::class.java))
+            }
+            
+            Result.success(usersList)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun getChatList(currentUserId: String): Result<List<ChatListItem>> {

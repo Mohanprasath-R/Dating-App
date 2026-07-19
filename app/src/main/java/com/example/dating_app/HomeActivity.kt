@@ -326,15 +326,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                         },
                         actions = {
                             if (!isSubScreen) {
-                                IconButton(onClick = { refreshTrigger++ }) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_heartbeat),
-                                        contentDescription = "Heartbeat",
-                                        tint = Color(0xFFFF1493),
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                                IconButton(onClick = { currentSubScreen = "filters" }) { 
+                                IconButton(onClick = { currentSubScreen = "filters" }) {
                                     Icon(Icons.Default.Tune, contentDescription = "Filters", tint = Color.Gray)
                                 }
                                 IconButton(onClick = { }) { 

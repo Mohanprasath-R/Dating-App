@@ -56,14 +56,14 @@ fun PremiumScreen(onClose: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .offset(y = 20.dp)
+                .offset(y = 40.dp)
 
         ) {
             IconButton(
                 onClick = onClose,
-                modifier = Modifier.align(Alignment.TopEnd)
+                modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 14.dp),
             ) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray,modifier = Modifier .size(35.dp))
             }
         }
         // Middle content: takes up remaining space, centered vertically

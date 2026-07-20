@@ -130,6 +130,72 @@ private fun getAge(dob: String): String {
     } catch (e: Exception) { "20" }
 }
 
+@Composable
+fun CustomDrawerItem(
+    label: String,
+    icon: ImageVector,
+    iconColor: Color,
+    iconBgColor: Color,
+    showBadge: Boolean = false,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFFFDFDFD), // Very light surface
+        shadowElevation = 0.5.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = iconBgColor
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(22.dp))
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (label == "Upgrade to Premium") Color(0xFFDAA520) else Color(0xFF333333)
+            )
+            
+            if (showBadge) {
+                Surface(
+                    color = Color(0xFFFFF3E0),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Text(
+                        text = "NEW",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFFB300)
+                    )
+                }
+            }
+            
+            Icon(
+                Icons.Default.ChevronRight, 
+                contentDescription = null, 
+                tint = Color.LightGray,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(onChatClick: (String, String) -> Unit) {
@@ -209,6 +275,14 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
         currentSubScreen == "settings" -> "Settings"
         currentSubScreen == "safety" -> "Safety Center"
         currentSubScreen == "filters" -> "Filters"
+        currentSubScreen == "security" -> "Security & Privacy"
+        currentSubScreen == "help" -> "Help & Support"
+        currentSubScreen == "faq" -> "FAQ"
+        currentSubScreen == "contact" -> "Contact Support"
+        currentSubScreen == "report" -> "Report a Problem"
+        currentSubScreen == "terms" -> "Terms of Service"
+        currentSubScreen == "privacy" -> "Privacy Policy"
+        currentSubScreen == "safety_guidelines" -> "Safety Guidelines"
         profileSubScreen == "details" -> "Profile Details"
         profileSubScreen == "edit" -> "Edit Profile"
         else -> when (selectedTab) {
@@ -225,78 +299,280 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
-                Spacer(modifier = Modifier.height(24.dp))
-                Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
-                    AsyncImage(
-                        model = if (currentUserProfile?.profile_image?.isNotEmpty() == true) currentUserProfile?.profile_image else R.drawable.girl,
+            ModalDrawerSheet(
+                drawerContainerColor = Color.White,
+                drawerShape = RoundedCornerShape(topEnd = 32.dp, bottomEnd = 32.dp),
+                modifier = Modifier.fillMaxHeight().width(320.dp)
+            ) {
+                // Header with decorative background
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color(0xFFFFEEF5), Color.White)
+                            )
+                        )
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Profile Image with ring
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(90.dp)
+                                    .border(2.dp, Color(0xFFFF1493), CircleShape)
+                                    .padding(4.dp)
+                            ) {
+                                AsyncImage(
+                                    model = if (currentUserProfile?.profile_image?.isNotEmpty() == true) currentUserProfile?.profile_image else R.drawable.girl,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop,
+                                    placeholder = painterResource(id = R.drawable.girl)
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.width(16.dp))
+                            
+                            Column {
+                                Text(
+                                    text = currentUserProfile?.let { "${it.first_name} ${it.last_name}" } ?: "User",
+                                    fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black
+                                )
+                                Text(
+                                    text = auth.currentUser?.email ?: "",
+                                    fontSize = 13.sp, color = Color.Gray, fontWeight = FontWeight.Normal
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Surface(
+                                    onClick = { 
+                                        currentSubScreen = "profile"
+                                        scope.launch { drawerState.close() }
+                                    },
+                                    color = Color(0xFFFF1493).copy(alpha = 0.08f),
+                                    shape = RoundedCornerShape(20.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.AccountCircle, 
+                                            contentDescription = null, 
+                                            modifier = Modifier.size(16.dp),
+                                            tint = Color(0xFFFF1493)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "View Profile", 
+                                            fontSize = 12.sp, 
+                                            color = Color(0xFFFF1493),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Decorative Sparkles (Top Right)
+                    Icon(
+                        Icons.Default.AutoAwesome,
                         contentDescription = null,
-                        modifier = Modifier.size(80.dp).clip(CircleShape).border(2.dp, Color(0xFFFF1493), CircleShape),
-                        contentScale = ContentScale.Crop,
-                        placeholder = painterResource(id = R.drawable.girl)
+                        tint = Color(0xFFFF1493).copy(alpha = 0.2f),
+                        modifier = Modifier.align(Alignment.TopEnd).padding(24.dp).size(24.dp)
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = currentUserProfile?.let { "${it.first_name} ${it.last_name}" } ?: "User",
-                        fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black
+                }
+
+                // Drawer Items
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CustomDrawerItem(
+                        label = "Settings",
+                        icon = Icons.Default.Settings,
+                        iconColor = Color(0xFFFF1493),
+                        iconBgColor = Color(0xFFFFEBF5),
+                        onClick = { currentSubScreen = "settings"; scope.launch { drawerState.close() } }
                     )
-                    Text(
-                        text = auth.currentUser?.email ?: "",
-                        fontSize = 14.sp, color = Color.Gray, fontWeight = FontWeight.Medium
+                    CustomDrawerItem(
+                        label = "Upgrade to Premium",
+                        icon = Icons.Default.Diamond,
+                        iconColor = Color(0xFFFFB300),
+                        iconBgColor = Color(0xFFFFF8E1),
+                        showBadge = true,
+                        onClick = { context.startActivity(Intent(context, PremiumActivity::class.java)); scope.launch { drawerState.close() } }
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "View Profile", fontSize = 14.sp, color = Color(0xFFFF1493),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { 
-                            currentSubScreen = "profile"
-                            scope.launch { drawerState.close() }
+                    CustomDrawerItem(
+                        label = "Safety Center",
+                        icon = Icons.Default.Shield,
+                        iconColor = Color(0xFF7E57C2),
+                        iconBgColor = Color(0xFFF3E5F5),
+                        onClick = { currentSubScreen = "safety"; scope.launch { drawerState.close() } }
+                    )
+                    CustomDrawerItem(
+                        label = "Blocked List",
+                        icon = Icons.Default.Block,
+                        iconColor = Color(0xFFEF5350),
+                        iconBgColor = Color(0xFFFFEBEE),
+                        onClick = { currentSubScreen = "blocked"; scope.launch { drawerState.close() } }
+                    )
+                    CustomDrawerItem(
+                        label = "Security & Privacy",
+                        icon = Icons.Default.Security,
+                        iconColor = Color(0xFF29B6F6),
+                        iconBgColor = Color(0xFFE1F5FE),
+                        onClick = { currentSubScreen = "security"; scope.launch { drawerState.close() } }
+                    )
+                    CustomDrawerItem(
+                        label = "Help & Support",
+                        icon = Icons.Default.Info,
+                        iconColor = Color(0xFF66BB6A),
+                        iconBgColor = Color(0xFFE8F5E9),
+                        onClick = { currentSubScreen = "help"; scope.launch { drawerState.close() } }
+                    )
+                    CustomDrawerItem(
+                        label = "Logout",
+                        icon = Icons.AutoMirrored.Filled.Logout,
+                        iconColor = Color(0xFFD32F2F),
+                        iconBgColor = Color(0xFFFFEBEE),
+                        onClick = {
+                            auth.signOut()
+                            context.startActivity(Intent(context, LoginActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            })
                         }
                     )
                 }
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
-                Spacer(modifier = Modifier.height(16.dp))
-                NavigationDrawerItem(
-                    label = { Text("Settings") }, selected = currentSubScreen == "settings",
-                    onClick = { currentSubScreen = "settings"; scope.launch { drawerState.close() } },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = null) }, modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Upgrade to Premium", color = Color(0xFFFFD700)) }, selected = false,
-                    onClick = { context.startActivity(Intent(context, PremiumActivity::class.java)); scope.launch { drawerState.close() } },
-                    icon = { Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD700)) }, modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Safety Center") }, selected = currentSubScreen == "safety",
-                    onClick = { currentSubScreen = "safety"; scope.launch { drawerState.close() } },
-                    icon = { Icon(Icons.Default.Shield, contentDescription = null) }, modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Blocked List") }, selected = currentSubScreen == "blocked",
-                    onClick = { currentSubScreen = "blocked"; scope.launch { drawerState.close() } },
-                    icon = { Icon(Icons.Default.Block, contentDescription = null) }, modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Security & Privacy") }, selected = false, onClick = { },
-                    icon = { Icon(Icons.Default.Security, contentDescription = null) }, modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Help & Support") }, selected = false, onClick = { },
-                    icon = { Icon(Icons.Default.Info, contentDescription = null) }, modifier = Modifier.padding(horizontal = 12.dp)
-                )
+
                 Spacer(modifier = Modifier.weight(1f))
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
-                NavigationDrawerItem(
-                    label = { Text("Logout", color = Color.Red) }, selected = false,
-                    onClick = {
-                        auth.signOut()
-                        context.startActivity(Intent(context, LoginActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                        })
-                    },
-                    icon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = Color.Red) },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp)
+
+                // Bottom Illustration (Safety/Security themed)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    // Decorative Botanical/Pink background elements
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, Color(0xFFFFEEF5).copy(alpha = 0.4f), Color.White)
+                                )
+                            )
+                    ) {
+                        // Mimicking the leaves with icons
+                        Icon(
+                            Icons.Default.Spa,
+                            contentDescription = null,
+                            tint = Color(0xFFFF1493).copy(alpha = 0.15f),
+                            modifier = Modifier.align(Alignment.BottomStart).padding(start = 40.dp, bottom = 10.dp).size(40.dp)
+                        )
+                        Icon(
+                            Icons.Default.Spa,
+                            contentDescription = null,
+                            tint = Color(0xFFFF1493).copy(alpha = 0.15f),
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 40.dp, bottom = 10.dp).size(40.dp)
+                        )
+                    }
+
+                    // Shield Illustration
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Surface(
+                                modifier = Modifier.size(60.dp),
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color(0xFFFFEEF5),
+                                border = BorderStroke(1.dp, Color(0xFFFF1493).copy(alpha = 0.1f))
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Shield,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF1493),
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    Icon(
+                                        Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp).offset(y = (-2).dp)
+                                    )
+                                }
+                            }
+                            // Small check badge on the shield
+                            Surface(
+                                modifier = Modifier.align(Alignment.BottomEnd).size(18.dp).offset(x = 2.dp, y = (-2).dp),
+                                shape = CircleShape,
+                                color = Color(0xFFFF1493),
+                                border = BorderStroke(2.dp, Color.White)
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.padding(2.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                    color = Color(0xFFF0F0F0),
+                    thickness = 1.dp
                 )
+
+                // Delete Account Button
+                Surface(
+                    onClick = {
+                        currentSubScreen = "security"
+                        scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .height(54.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFFFFEBEE),
+                    border = BorderStroke(1.dp, Color(0xFFFFCDD2)),
+                    shadowElevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.DeleteForever,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = Color(0xFFD32F2F)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            "Delete Account",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFD32F2F)
+                        )
+                    }
+                }
+
+                // Version Info
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Version 1.0.4", fontSize = 11.sp, color = Color.LightGray)
+                    Text("© 2024 Dating App Inc.", fontSize = 11.sp, color = Color.LightGray)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     ) {
@@ -529,6 +805,14 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                         currentSubScreen == "settings" -> SettingsScreen()
                         currentSubScreen == "safety" -> SafetyCenterScreen()
                         currentSubScreen == "filters" -> FiltersScreen()
+                        currentSubScreen == "security" -> SecurityPrivacyScreen()
+                        currentSubScreen == "help" -> HelpSupportScreen(onOptionClick = { currentSubScreen = it })
+                        currentSubScreen == "faq" -> FAQScreen()
+                        currentSubScreen == "contact" -> ContactSupportScreen()
+                        currentSubScreen == "report" -> ReportProblemScreen()
+                        currentSubScreen == "terms" -> TermsOfServiceScreen()
+                        currentSubScreen == "privacy" -> PrivacyPolicyScreen()
+                        currentSubScreen == "safety_guidelines" -> SafetyGuidelinesScreen()
                         currentSubScreen == "profile" -> UserProfileScreen(
                             onSubScreenChange = { profileSubScreen = it },
                             requestedSubScreen = profileSubScreen,
@@ -2317,24 +2601,107 @@ fun ActionCircleButton(
 }
 @Composable
 fun SettingsScreen() {
-    val items = listOf(
-        "Account" to Icons.Default.Person,
-        "Privacy" to Icons.Default.Lock,
-        "Notifications" to Icons.Default.Notifications,
-        "Subscription" to Icons.Default.Star,
-        "Help & Support" to Icons.Default.Help,
-        "About" to Icons.Default.Info
+    val settingsItems = listOf(
+        Triple("Account", "Personal info, email, and phone", Icons.Default.Person),
+        Triple("Privacy", "Visibility and blocked users", Icons.Default.Lock),
+        Triple("Notifications", "Push alerts and messages", Icons.Default.Notifications),
+        Triple("Subscription", "Manage your premium plan", Icons.Default.Star),
+        Triple("Help & Support", "FAQ and contact details", Icons.Default.Help),
+        Triple("About", "Version and legal info", Icons.Default.Info)
     )
 
-    LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        items(items) { (title, icon) ->
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color.White),
+        contentPadding = PaddingValues(bottom = 32.dp)
+    ) {
+        item {
+            // Decorative Header Area
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color(0xFFFFEEF5), Color.White)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    modifier = Modifier.size(80.dp),
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 4.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = Color(0xFFFF1493),
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        items(settingsItems) { (title, subtitle, icon) ->
             ListItem(
-                headlineContent = { Text(title) },
-                leadingContent = { Icon(icon, contentDescription = null, tint = Color.Gray) },
-                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null) },
-                modifier = Modifier.clickable { }
+                headlineContent = { 
+                    Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) 
+                },
+                supportingContent = { 
+                    Text(subtitle, fontSize = 12.sp, color = Color.Gray) 
+                },
+                leadingContent = { 
+                    Surface(
+                        color = Color(0xFFF8F9FE), 
+                        shape = RoundedCornerShape(12.dp), 
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                icon, 
+                                contentDescription = null, 
+                                tint = Color(0xFFFF1493), 
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                },
+                trailingContent = { 
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFFD1D1D1)) 
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp)
+                    .clickable { }
             )
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6))
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp), 
+                color = Color(0xFFF3F4F6),
+                thickness = 0.5.dp
+            )
+        }
+        
+        item {
+            Spacer(modifier = Modifier.height(32.dp))
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "App Version 1.0.4",
+                    fontSize = 12.sp,
+                    color = Color.LightGray,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    "Dating App Inc.",
+                    fontSize = 11.sp,
+                    color = Color.LightGray
+                )
+            }
         }
     }
 }
@@ -2411,6 +2778,594 @@ fun FiltersScreen() {
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF2D6C))
         ) {
             Text("Apply Filters")
+        }
+    }
+}
+
+@Composable
+fun SecurityPrivacyScreen() {
+    val securityItems = listOf(
+        Triple("Two-Factor Authentication", "Add an extra layer of security", Icons.Default.VpnKey),
+        Triple("Login Activity", "Check where you're logged in", Icons.Default.Devices),
+        Triple("Security Checkup", "Keep your account safe", Icons.Default.VerifiedUser)
+    )
+
+    val privacyItems = listOf(
+        Triple("Private Profile", "Only your matches can see your photos", Icons.Default.VisibilityOff),
+        Triple("Active Status", "Show when you're online", Icons.Default.ToggleOn),
+        Triple("Read Receipts", "Let others know you've read messages", Icons.Default.DoneAll)
+    )
+
+    LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
+        item {
+            Text(
+                "Security",
+                modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
+                style = MaterialTheme.typography.titleMedium,
+                color = Color(0xFFFF1493),
+                fontWeight = FontWeight.Bold
+            )
+        }
+        items(securityItems) { (title, subtitle, icon) ->
+            val context = LocalContext.current
+            ListItem(
+                headlineContent = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
+                supportingContent = { Text(subtitle, fontSize = 12.sp, color = Color.Gray) },
+                leadingContent = { 
+                    Surface(
+                        color = Color(0xFFF8F9FE), 
+                        shape = CircleShape, 
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                icon, 
+                                contentDescription = null, 
+                                tint = Color(0xFF29B6F6), 
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                },
+                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFFD1D1D1)) },
+                modifier = Modifier.clickable { 
+                    if (title == "Two-Factor Authentication") {
+                        context.startActivity(Intent(context, PasskeyActivity::class.java))
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6), thickness = 0.5.dp)
+        }
+
+        item {
+            Text(
+                "Privacy",
+                modifier = Modifier.padding(start = 16.dp, top = 32.dp, bottom = 8.dp),
+                style = MaterialTheme.typography.titleMedium,
+                color = Color(0xFFFF1493),
+                fontWeight = FontWeight.Bold
+            )
+        }
+        items(privacyItems) { (title, subtitle, icon) ->
+            ListItem(
+                headlineContent = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
+                supportingContent = { Text(subtitle, fontSize = 12.sp, color = Color.Gray) },
+                leadingContent = { 
+                    Surface(
+                        color = Color(0xFFF8F9FE), 
+                        shape = CircleShape, 
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                icon, 
+                                contentDescription = null, 
+                                tint = Color(0xFF7E57C2), 
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                },
+                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFFD1D1D1)) },
+                modifier = Modifier.clickable { }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6), thickness = 0.5.dp)
+        }
+
+        item {
+            var showDeleteDialog by remember { mutableStateOf(false) }
+            val scope = rememberCoroutineScope()
+            val repository = remember { FirebaseRepository() }
+            val auth = FirebaseAuth.getInstance()
+            val context = LocalContext.current
+
+            if (showDeleteDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteDialog = false },
+                    title = { Text("Delete Account") },
+                    text = { Text("Are you sure you want to permanently delete your account? This action cannot be undone.") },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    auth.currentUser?.uid?.let { uid ->
+                                        repository.deleteAccount(uid).onSuccess {
+                                            context.startActivity(Intent(context, LoginActivity::class.java).apply {
+                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                            })
+                                        }
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                        ) { Text("Delete", color = Color.White) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(48.dp))
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(56.dp)
+                    .clickable { showDeleteDialog = true },
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFFFEBEE),
+                border = BorderStroke(1.dp, Color(0xFFFFCDD2))
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteForever,
+                        contentDescription = null,
+                        tint = Color(0xFFD32F2F)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Delete Account",
+                        color = Color(0xFFD32F2F),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+fun HelpSupportScreen(onOptionClick: (String) -> Unit) {
+    val supportOptions = listOf(
+        Triple("FAQ", "Frequently asked questions", Icons.Default.QuestionAnswer),
+        Triple("Contact Support", "Our team is here to help", Icons.Default.Email),
+        Triple("Report a Problem", "Let us know if something is wrong", Icons.Default.BugReport)
+    )
+
+    val legalOptions = listOf(
+        Triple("Terms of Service", "The rules of our community", Icons.Default.Gavel),
+        Triple("Privacy Policy", "How we handle your data", Icons.Default.Policy),
+        Triple("Safety Guidelines", "Stay safe while dating", Icons.Default.HealthAndSafety)
+    )
+
+    LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
+        item {
+            Box(
+                modifier = Modifier.fillMaxWidth().height(180.dp).background(
+                    Brush.verticalGradient(listOf(Color(0xFFFFEEF5), Color.White))
+                ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.SupportAgent, contentDescription = null, tint = Color(0xFFFF1493), modifier = Modifier.size(56.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("How can we help you?", fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                }
+            }
+        }
+
+        item {
+            Text(
+                "Support",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        items(supportOptions) { (title, subtitle, icon) ->
+            ListItem(
+                headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
+                supportingContent = { Text(subtitle, fontSize = 12.sp, color = Color.Gray) },
+                leadingContent = { 
+                    Icon(icon, contentDescription = null, tint = Color(0xFF66BB6A))
+                },
+                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.LightGray) },
+                modifier = Modifier.clickable { 
+                    when(title) {
+                        "FAQ" -> onOptionClick("faq")
+                        "Contact Support" -> onOptionClick("contact")
+                        "Report a Problem" -> onOptionClick("report")
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6))
+        }
+
+        item {
+            Text(
+                "Legal & Safety",
+                modifier = Modifier.padding(16.dp, 24.dp, 16.dp, 16.dp),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        items(legalOptions) { (title, subtitle, icon) ->
+            ListItem(
+                headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
+                supportingContent = { Text(subtitle, fontSize = 12.sp, color = Color.Gray) },
+                leadingContent = { 
+                    Icon(icon, contentDescription = null, tint = Color(0xFF5C6BC0))
+                },
+                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.LightGray) },
+                modifier = Modifier.clickable { 
+                    when(title) {
+                        "Terms of Service" -> onOptionClick("terms")
+                        "Privacy Policy" -> onOptionClick("privacy")
+                        "Safety Guidelines" -> onOptionClick("safety_guidelines")
+                    }
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6))
+        }
+
+        item {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Version 1.0.4", fontSize = 12.sp, color = Color.LightGray)
+                Text("© 2024 Dating App Inc.", fontSize = 12.sp, color = Color.LightGray)
+            }
+        }
+    }
+}
+
+@Composable
+fun FAQScreen() {
+    val faqs = listOf(
+        "How do I create a profile?" to "Go to the profile tab and tap on 'Edit Profile' to add your photos and bio. Make sure to use clear, high-quality photos to attract more matches!",
+        "How does matching work?" to "When two people like each other by swiping right, it's a match! You'll be notified immediately and can start a conversation from the 'Chats' tab.",
+        "Is my data safe?" to "Absolutely. We use industry-standard end-to-end encryption to protect your messages and personal information. Your privacy is our top priority.",
+        "How do I report someone?" to "Your safety is important. Tap the '...' menu on any user's profile or inside a chat window to report inappropriate behavior or block a user.",
+        "Can I change my location?" to "Yes! You can update your city in your profile settings or use filters to find people in different areas."
+    )
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color(0xFFFDFDFD)),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text(
+                "Frequently Asked Questions",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.Black,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+        
+        items(faqs) { (question, answer) ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                border = BorderStroke(1.dp, Color(0xFFF3F4F6))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = Color(0xFFFFEEF5),
+                            shape = CircleShape,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.QuestionAnswer, null, tint = Color(0xFFFF1493), modifier = Modifier.size(16.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(text = question, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = answer, 
+                        fontSize = 14.sp, 
+                        color = Color.Gray,
+                        lineHeight = 20.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ContactSupportScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(24.dp)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color(0xFFFFEEF5),
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.SupportAgent, null, tint = Color(0xFFFF1493), modifier = Modifier.size(64.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("We're here to help!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Our support team is available 24/7 to ensure you have the best experience.",
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        Text("Support Channels", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        SupportChannelItem(icon = Icons.Default.Email, title = "Email Support", value = "support@datingapp.com", bgColor = Color(0xFFE8F5E9), iconColor = Color(0xFF4CAF50))
+        SupportChannelItem(icon = Icons.Default.Phone, title = "Hotline", value = "+1 (800) 123-4567", bgColor = Color(0xFFE3F2FD), iconColor = Color(0xFF2196F3))
+        SupportChannelItem(icon = Icons.Default.Chat, title = "Live Chat", value = "Typical response: 5 mins", bgColor = Color(0xFFFFF3E0), iconColor = Color(0xFFFF9800))
+
+        Spacer(modifier = Modifier.weight(1f))
+        
+        Button(
+            onClick = { },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1493))
+        ) {
+            Text("Send us a Message", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun SupportChannelItem(icon: ImageVector, title: String, value: String, bgColor: Color, iconColor: Color) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFFF9FAFB),
+        border = BorderStroke(1.dp, Color(0xFFF3F4F6))
+    ) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = bgColor, shape = RoundedCornerShape(12.dp), modifier = Modifier.size(48.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(24.dp))
+                }
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(text = title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(text = value, fontSize = 13.sp, color = Color.Gray)
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray)
+        }
+    }
+}
+
+@Composable
+fun ReportProblemScreen() {
+    var problemText by remember { mutableStateOf("") }
+    Column(modifier = Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+        Text("Report a Problem", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Text("Spotted a bug? Help us improve your experience by describing it below.", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Text("Description", fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.padding(bottom = 8.dp))
+        OutlinedTextField(
+            value = problemText,
+            onValueChange = { problemText = it },
+            modifier = Modifier.fillMaxWidth().height(200.dp),
+            placeholder = { Text("What happened? When did you notice it?", color = Color.LightGray) },
+            shape = RoundedCornerShape(20.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFFFF1493),
+                unfocusedBorderColor = Color(0xFFF3F4F6),
+                unfocusedContainerColor = Color(0xFFF9FAFB),
+                focusedContainerColor = Color(0xFFF9FAFB)
+            )
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Surface(
+            color = Color(0xFFF1F1F1),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth().clickable { }
+        ) {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AddPhotoAlternate, null, tint = Color.Gray)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Add Screenshots (Optional)", color = Color.Gray, fontSize = 14.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+        
+        Button(
+            onClick = { },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1493)),
+            enabled = problemText.isNotBlank()
+        ) {
+            Text("Submit Report", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun TermsOfServiceScreen() {
+    val terms = listOf(
+        "1. Acceptance of Terms" to "By accessing or using our application, you agree to be bound by these Terms of Service. If you do not agree to all of the terms and conditions, then you may not access the service.",
+        "2. Eligibility" to "You must be at least 18 years of age to create an account on this platform. By using the service, you represent and warrant that you have the right, authority, and capacity to enter into this agreement.",
+        "3. User Conduct" to "You are solely responsible for your interactions with other users. You agree to treat all members with respect and refrain from any form of harassment, hate speech, or illegal activities.",
+        "4. Content" to "You retain ownership of the content you post, but you grant us a worldwide license to use it. We reserve the right to remove any content that violates our community guidelines.",
+        "5. Safety and Security" to "While we strive to provide a safe environment, we are not responsible for the conduct of any user on or off the service. Always use caution when meeting new people."
+    )
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color.White),
+        contentPadding = PaddingValues(24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        item {
+            Text(
+                "Terms of Service",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+            Text(
+                "Last Updated: June 2024",
+                fontSize = 12.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        
+        items(terms) { (title, content) ->
+            Column {
+                Text(text = title, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = Color(0xFFFF1493))
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = content, 
+                    fontSize = 14.sp, 
+                    color = Color(0xFF424242),
+                    lineHeight = 22.sp,
+                    textAlign = TextAlign.Justify
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PrivacyPolicyScreen() {
+    val policies = listOf(
+        "Data Collection" to "We collect personal information that you provide to us, including your name, photos, bio, and preferences. We also collect usage data and device information automatically.",
+        "How We Use Data" to "Your data is used to provide and improve the service, facilitate matching, ensure safety through moderation, and personalize your experience.",
+        "Data Sharing" to "We do not sell your personal data. We only share information with trusted third-party service providers who help us operate our app, or when required by law.",
+        "Your Privacy Rights" to "You have the right to access, update, or delete your information at any time. You can manage your privacy settings directly within the app's account settings.",
+        "Security Measures" to "We implement robust security measures to protect your data from unauthorized access, including encryption and secure server infrastructure."
+    )
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color.White),
+        contentPadding = PaddingValues(24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        item {
+            Text(
+                "Privacy Policy",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+            Text(
+                "Your privacy matters to us.",
+                fontSize = 14.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        
+        items(policies) { (title, content) ->
+            Column {
+                Text(text = title, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.Black)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = content, 
+                    fontSize = 14.sp, 
+                    color = Color.DarkGray,
+                    lineHeight = 22.sp
+                )
+            }
+            HorizontalDivider(modifier = Modifier.padding(top = 16.dp), color = Color(0xFFF3F4F6))
+        }
+    }
+}
+
+@Composable
+fun SafetyGuidelinesScreen() {
+    val guidelines = listOf(
+        "Meet in Public" to "For the first few dates, always meet in a well-lit, busy public place like a popular cafe, restaurant, or park. Avoid private locations.",
+        "Tell a Friend" to "Share your date's name, location, and time with a trusted friend or family member. Let them know when you've arrived and when you're back home safely.",
+        "Trust Your Instincts" to "If something feels off or you feel uncomfortable, don't hesitate to leave immediately. Your safety and comfort are more important than being polite.",
+        "Guard Financial Info" to "Never send money or share bank details, credit card numbers, or social security information with anyone you meet online, regardless of their story.",
+        "Stay on the App" to "Keep your conversations within our platform for as long as possible. Our moderation tools are here to protect you while you're getting to know someone."
+    )
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color(0xFFF9FAFB)),
+        contentPadding = PaddingValues(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text(
+                "Safety Guidelines",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+        
+        items(guidelines) { (title, content) ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White,
+                shadowElevation = 1.dp
+            ) {
+                Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.Top) {
+                    Icon(
+                        Icons.Default.HealthAndSafety, 
+                        contentDescription = null, 
+                        tint = Color(0xFF4CAF50), 
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(text = title, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = Color.Black)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = content, 
+                            fontSize = 14.sp, 
+                            color = Color(0xFF616161),
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
+            }
         }
     }
 }

@@ -766,4 +766,16 @@ class FirebaseRepository {
             }
         awaitClose { subscription.remove() }
     }
+
+    suspend fun deleteAccount(userId: String): Result<Unit> {
+        return try {
+            // Delete user document
+            usersCollection.document(userId).delete().await()
+            // Delete from auth
+            auth.currentUser?.delete()?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

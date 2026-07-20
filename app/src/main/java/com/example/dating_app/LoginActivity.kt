@@ -465,7 +465,7 @@ fun SwipeToLoginButton(
     ) {
         // Background Text - Fades out as you swipe
         Text(
-            text = if (isLoading) "Logging in..." else "Swipe to Login",
+            text = if (isLoading) "" else "Swipe to Login",
             color = Color.White.copy(alpha = (0.8f - progress).coerceAtLeast(0f)),
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp,

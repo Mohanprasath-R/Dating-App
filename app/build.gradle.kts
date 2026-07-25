@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
     implementation(libs.play.services.location)
+    implementation(libs.androidx.biometric)
 
     // Firebase
     implementation(platform(libs.firebase.bom))

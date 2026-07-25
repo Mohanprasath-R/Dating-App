@@ -82,6 +82,7 @@ import com.example.dating_app.model.MessageType
 import com.example.dating_app.model.Call
 import com.example.dating_app.repository.FirebaseRepository
 import com.example.dating_app.util.SecurityUtils
+import com.example.dating_app.UserProfileScreen
 import com.google.firebase.auth.FirebaseAuth
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
@@ -2822,7 +2823,7 @@ fun SecurityPrivacyScreen() {
                 trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFFD1D1D1)) },
                 modifier = Modifier.clickable { 
                     if (title == "Two-Factor Authentication") {
-                        context.startActivity(Intent(context, PasskeyActivity::class.java))
+                        context.startActivity(Intent(context, TwoFactorAuthActivity::class.java))
                     }
                 }
             )

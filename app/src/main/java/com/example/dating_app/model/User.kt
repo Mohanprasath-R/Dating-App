@@ -21,6 +21,7 @@ data class User(
     val language: String = "",
     val timezone: String = "",
     val pin: String = "",
+    val biometric_enabled: Boolean = false,
     val latitude: Double? = null,
     val longitude: Double? = null,
     val location_enabled: Boolean = true,

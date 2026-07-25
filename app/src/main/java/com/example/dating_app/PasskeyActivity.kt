@@ -2,9 +2,12 @@ package com.example.dating_app
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -21,6 +24,8 @@ import androidx.compose.material3.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import com.datingapp.R
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,12 +44,11 @@ import com.example.dating_app.repository.FirebaseRepository
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 
-class PasskeyActivity : ComponentActivity() {
+class PasskeyActivity : FragmentActivity() {
     private val repository = FirebaseRepository()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser
@@ -92,6 +96,7 @@ class PasskeyActivity : ComponentActivity() {
                     } else if (userPin != null) {
                         PasskeyScreen(
                             correctPasscode = userPin!!,
+                            biometricEnabled = currentUserData?.biometric_enabled ?: false,
                             onSuccess = {
                                 // Initialization after successful PIN entry
                                 currentUserData?.let { user ->
@@ -105,6 +110,15 @@ class PasskeyActivity : ComponentActivity() {
                                 FirebaseAuth.getInstance().signOut()
                                 startActivity(Intent(this@PasskeyActivity, LoginActivity::class.java))
                                 finish()
+                            },
+                            onBiometricClick = {
+                                showBiometricPrompt(onSuccess = {
+                                    currentUserData?.let { user ->
+                                        (application as MyApplication).initZegoService(user.id, "${user.first_name} ${user.last_name}")
+                                    }
+                                    startActivity(Intent(this@PasskeyActivity, HomeActivity::class.java))
+                                    finish()
+                                })
                             }
                         )
                     }
@@ -112,16 +126,54 @@ class PasskeyActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun showBiometricPrompt(onSuccess: () -> Unit) {
+        val executor = ContextCompat.getMainExecutor(this)
+        val biometricPrompt = BiometricPrompt(this, executor,
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    super.onAuthenticationError(errorCode, errString)
+                    Toast.makeText(applicationContext, "Authentication error: $errString", Toast.LENGTH_SHORT).show()
+                }
+
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    super.onAuthenticationSucceeded(result)
+                    onSuccess()
+                }
+
+                override fun onAuthenticationFailed() {
+                    super.onAuthenticationFailed()
+                    Toast.makeText(applicationContext, "Authentication failed", Toast.LENGTH_SHORT).show()
+                }
+            })
+
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Biometric login for HeyDate")
+            .setSubtitle("Log in using your biometric credential")
+            .setNegativeButtonText("Use PIN instead")
+            .build()
+
+        biometricPrompt.authenticate(promptInfo)
+    }
 }
 
 @Composable
 fun PasskeyScreen(
     correctPasscode: String,
+    biometricEnabled: Boolean = false,
     onSuccess: () -> Unit,
-    onUsePasswordInstead: () -> Unit
+    onUsePasswordInstead: () -> Unit,
+    onBiometricClick: () -> Unit = {}
 ) {
     var passcode by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
+
+    // Auto-trigger biometrics if enabled
+    LaunchedEffect(biometricEnabled) {
+        if (biometricEnabled) {
+            onBiometricClick()
+        }
+    }
     
     // Floating Hearts Background
     val heartParticles = remember {
@@ -243,7 +295,8 @@ fun PasskeyScreen(
                     if (passcode.isNotEmpty() && !isError) {
                         passcode = passcode.dropLast(1)
                     }
-                }
+                },
+                onBiometricClick = if (biometricEnabled) onBiometricClick else null
             )
 
             Spacer(modifier = Modifier.height(30.dp))
@@ -394,13 +447,14 @@ fun PasswordButton(
 @Composable
 fun NumericKeypad(
     onNumberClick: (String) -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onBiometricClick: (() -> Unit)? = null
 ) {
     val rows = listOf(
         listOf("1", "2", "3"),
         listOf("4", "5", "6"),
         listOf("7", "8", "9"),
-        listOf("", "0", "⌫")
+        listOf(if (onBiometricClick != null) "BIO" else "", "0", "⌫")
     )
 
     Column(
@@ -421,6 +475,12 @@ fun NumericKeypad(
                     when (item) {
 
                         "" -> Spacer(modifier = Modifier.size(78.dp))
+                        
+                        "BIO" -> 
+                            KeypadButton(
+                                text = item,
+                                onClick = { onBiometricClick?.invoke() }
+                            )
 
                         "⌫" ->
                             KeypadButton(
@@ -467,6 +527,13 @@ fun KeypadButton(
                     modifier = Modifier.size(28.dp)
                 )
 
+            } else if (text == "BIO") {
+                Icon(
+                    imageVector = Icons.Default.Fingerprint,
+                    contentDescription = null,
+                    tint = Color(0xFFFF1493),
+                    modifier = Modifier.size(32.dp)
+                )
             } else {
 
                 Text(

@@ -2,6 +2,7 @@ package com.example.dating_app
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -795,7 +796,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                 Box(modifier = Modifier.padding(contentPadding)) {
                     when {
                         currentSubScreen == "blocked" -> BlockedListScreen()
-                        currentSubScreen == "settings" -> SettingsScreen()
+                        currentSubScreen == "settings" -> SettingsScreen(onOptionClick = { currentSubScreen = it })
                         currentSubScreen == "safety" -> SafetyCenterScreen()
                         currentSubScreen == "filters" -> FiltersScreen()
                         currentSubScreen == "security" -> SecurityPrivacyScreen()
@@ -2593,7 +2594,7 @@ fun ActionCircleButton(
     }
 }
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onOptionClick: (String) -> Unit) {
     val settingsItems = listOf(
         Triple("Account", "Personal info, email, and phone", Icons.Default.Person),
         Triple("Privacy", "Visibility and blocked users", Icons.Default.Lock),
@@ -2639,6 +2640,7 @@ fun SettingsScreen() {
         }
 
         items(settingsItems) { (title, subtitle, icon) ->
+            val context = LocalContext.current
             ListItem(
                 headlineContent = { 
                     Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) 
@@ -2668,7 +2670,16 @@ fun SettingsScreen() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
-                    .clickable { }
+                    .clickable { 
+                        when (title) {
+                            "Account" -> context.startActivity(Intent(context, AccountSettingsActivity::class.java))
+                            "Privacy" -> onOptionClick("security")
+                            "Notifications" -> context.startActivity(Intent(context, NotificationsSettingsActivity::class.java))
+                            "Subscription" -> context.startActivity(Intent(context, SubscriptionSettingsActivity::class.java))
+                            "Help & Support" -> onOptionClick("help")
+                            "About" -> { /* Handle About or navigate */ }
+                        }
+                    }
             )
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp), 
@@ -2777,6 +2788,21 @@ fun FiltersScreen() {
 
 @Composable
 fun SecurityPrivacyScreen() {
+    val repository = remember { FirebaseRepository() }
+    val auth = remember { FirebaseAuth.getInstance() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    
+    var user by remember { mutableStateOf<User?>(null) }
+    
+    LaunchedEffect(Unit) {
+        auth.currentUser?.uid?.let { uid ->
+            repository.getUser(uid).onSuccess { fetchedUser ->
+                user = fetchedUser
+            }
+        }
+    }
+
     val securityItems = listOf(
         Triple("Two-Factor Authentication", "Add an extra layer of security", Icons.Default.VpnKey),
         Triple("Login Activity", "Check where you're logged in", Icons.Default.Devices),
@@ -2800,7 +2826,6 @@ fun SecurityPrivacyScreen() {
             )
         }
         items(securityItems) { (title, subtitle, icon) ->
-            val context = LocalContext.current
             ListItem(
                 headlineContent = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
                 supportingContent = { Text(subtitle, fontSize = 12.sp, color = Color.Gray) },
@@ -2822,8 +2847,16 @@ fun SecurityPrivacyScreen() {
                 },
                 trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFFD1D1D1)) },
                 modifier = Modifier.clickable { 
-                    if (title == "Two-Factor Authentication") {
-                        context.startActivity(Intent(context, TwoFactorAuthActivity::class.java))
+                    when (title) {
+                        "Two-Factor Authentication" -> {
+                            context.startActivity(Intent(context, TwoFactorAuthActivity::class.java))
+                        }
+                        "Login Activity" -> {
+                            context.startActivity(Intent(context, LoginActivityHistoryActivity::class.java))
+                        }
+                        "Security Checkup" -> {
+                            context.startActivity(Intent(context, SecurityCheckupActivity::class.java))
+                        }
                     }
                 }
             )
@@ -2840,6 +2873,13 @@ fun SecurityPrivacyScreen() {
             )
         }
         items(privacyItems) { (title, subtitle, icon) ->
+            val isChecked = when (title) {
+                "Private Profile" -> user?.private_profile ?: false
+                "Active Status" -> user?.show_active_status ?: true
+                "Read Receipts" -> user?.read_receipts ?: true
+                else -> false
+            }
+
             ListItem(
                 headlineContent = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
                 supportingContent = { Text(subtitle, fontSize = 12.sp, color = Color.Gray) },
@@ -2859,8 +2899,43 @@ fun SecurityPrivacyScreen() {
                         }
                     }
                 },
-                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFFD1D1D1)) },
-                modifier = Modifier.clickable { }
+                trailingContent = {
+                    Switch(
+                        checked = isChecked,
+                        onCheckedChange = { enabled ->
+                            val field = when (title) {
+                                "Private Profile" -> "private_profile"
+                                "Active Status" -> "show_active_status"
+                                "Read Receipts" -> "read_receipts"
+                                else -> ""
+                            }
+                            if (field.isNotEmpty()) {
+                                scope.launch {
+                                    auth.currentUser?.uid?.let { uid ->
+                                        repository.updateProfile(uid, mapOf(field to enabled))
+                                            .onSuccess {
+                                                user = when (field) {
+                                                    "private_profile" -> user?.copy(private_profile = enabled)
+                                                    "show_active_status" -> user?.copy(show_active_status = enabled)
+                                                    "read_receipts" -> user?.copy(read_receipts = enabled)
+                                                    else -> user
+                                                }
+                                                Toast.makeText(context, "$title updated", Toast.LENGTH_SHORT).show()
+                                            }
+                                            .onFailure {
+                                                Toast.makeText(context, "Failed to update $title", Toast.LENGTH_SHORT).show()
+                                            }
+                                    }
+                                }
+                            }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFFFF1493)
+                        )
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6), thickness = 0.5.dp)
         }

@@ -25,7 +25,9 @@ import kotlinx.coroutines.tasks.await
 data class ChatListItem(
     val partner: User,
     val lastMessage: Message?,
-    val unreadCount: Int
+    val unreadCount: Int,
+    val isPinned: Boolean = false,
+    val isMuted: Boolean = false
 )
 
 class FirebaseRepository {
@@ -425,6 +427,26 @@ class FirebaseRepository {
         }
     }
 
+    suspend fun addReaction(messageId: String, userId: String, emoji: String): Result<Unit> {
+        return try {
+            // Using set with merge is safer if the 'reactions' field doesn't exist yet
+            val reactionData = mapOf("reactions" to mapOf(userId to emoji))
+            messagesCollection.document(messageId).set(reactionData, SetOptions.merge()).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun removeReaction(messageId: String, userId: String): Result<Unit> {
+        return try {
+            messagesCollection.document(messageId).update("reactions.$userId", FieldValue.delete()).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun getMessages(userId1: String, userId2: String): Flow<List<Message>> = callbackFlow {
         // Optimized query to fetch only messages between these two users
         val messagesQuery = messagesCollection.where(
@@ -575,6 +597,8 @@ class FirebaseRepository {
                         
                         // Use a cached user fetch if possible
                         val partner = getUser(partnerId).getOrNull()
+                        val currentUserData = getUser(currentUserId).getOrNull()
+
                         if (partner != null) {
                             val sortedMessages = partnerMessages.sortedByDescending { it.timestamp }
                             val lastMessage = sortedMessages.firstOrNull()
@@ -583,12 +607,20 @@ class FirebaseRepository {
                                 it.receiverId == currentUserId && !it.isRead && !it.deletedForEveryone 
                             }
                             
-                            resultList.add(ChatListItem(partner, lastMessage, unreadCount))
+                            val isPinned = currentUserData?.pinned_chats?.contains(partnerId) == true
+                            val isMuted = currentUserData?.muted_chats?.contains(partnerId) == true
+
+                            resultList.add(ChatListItem(partner, lastMessage, unreadCount, isPinned, isMuted))
                         }
                     }
                     
-                    // Send the final sorted list
-                    trySend(resultList.sortedByDescending { it.lastMessage?.timestamp ?: 0L })
+                    // Sort pinned first, then by timestamp
+                    val sortedList = resultList.sortedWith(
+                        compareByDescending<ChatListItem> { it.isPinned }
+                            .thenByDescending { it.lastMessage?.timestamp ?: 0L }
+                    )
+                    
+                    trySend(sortedList)
                 } catch (e: Exception) {
                     android.util.Log.e("FirebaseRepository", "Error processing chat list: ${e.message}")
                 }
@@ -891,6 +923,52 @@ class FirebaseRepository {
             usersCollection.document(userId).delete().await()
             // Delete from auth
             auth.currentUser?.delete()?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun togglePinChat(userId: String, partnerId: String, pin: Boolean): Result<Unit> {
+        return try {
+            val update = if (pin) FieldValue.arrayUnion(partnerId) else FieldValue.arrayRemove(partnerId)
+            usersCollection.document(userId).update("pinned_chats", update).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun toggleMuteChat(userId: String, partnerId: String, mute: Boolean): Result<Unit> {
+        return try {
+            val update = if (mute) FieldValue.arrayUnion(partnerId) else FieldValue.arrayRemove(partnerId)
+            usersCollection.document(userId).update("muted_chats", update).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteConversation(userId: String, partnerId: String): Result<Unit> {
+        return try {
+            val snapshot = messagesCollection.where(
+                com.google.firebase.firestore.Filter.or(
+                    com.google.firebase.firestore.Filter.and(
+                        com.google.firebase.firestore.Filter.equalTo("senderId", userId),
+                        com.google.firebase.firestore.Filter.equalTo("receiverId", partnerId)
+                    ),
+                    com.google.firebase.firestore.Filter.and(
+                        com.google.firebase.firestore.Filter.equalTo("senderId", partnerId),
+                        com.google.firebase.firestore.Filter.equalTo("receiverId", userId)
+                    )
+                )
+            ).get().await()
+
+            val batch = firestore.batch()
+            for (doc in snapshot.documents) {
+                batch.delete(doc.reference)
+            }
+            batch.commit().await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

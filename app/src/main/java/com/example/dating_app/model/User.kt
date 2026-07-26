@@ -40,6 +40,8 @@ data class User(
     val likes: Int = 0,
     val matches: Int = 0,
     val photos_count: Int = 0,
+    val pinned_chats: List<String> = emptyList(),
+    val muted_chats: List<String> = emptyList(),
     val created_at: Long = System.currentTimeMillis(),
     val updated_at: Long = System.currentTimeMillis()
 )

@@ -3,9 +3,10 @@
 package com.example.dating_app
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -14,11 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.flow.flowOf
@@ -28,10 +25,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import coil.compose.AsyncImage
 import com.datingapp.R
 import com.example.dating_app.model.Message
@@ -45,11 +45,13 @@ import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.ui.tooling.preview.Preview
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) {
     val repository = remember { FirebaseRepository() }
     val currentUser = remember { FirebaseAuth.getInstance().currentUser }
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     
     // Real-time Chat List
     val chats by remember(currentUser?.uid) {
@@ -63,6 +65,11 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
     var searchQuery by remember { mutableStateOf("") }
     var selectedTab by remember { mutableIntStateOf(0) } // 0 for Messages, 1 for Requests
     var localRefreshTrigger by remember { mutableIntStateOf(0) }
+    
+    // Bottom Sheet State
+    var selectedChatItemForMenu by remember { mutableStateOf<ChatListItem?>(null) }
+    val sheetState = rememberModalBottomSheetState()
+    var showBottomSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(refreshTrigger, localRefreshTrigger) {
         currentUser?.let { user ->
@@ -203,7 +210,16 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(filteredChats) { chatItem ->
-                            ModernChatItem(chatItem, currentUser?.uid, onChatClick)
+                            ModernChatItem(
+                                chatItem = chatItem, 
+                                currentUserId = currentUser?.uid, 
+                                onChatClick = onChatClick,
+                                onLongClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selectedChatItemForMenu = chatItem
+                                    showBottomSheet = true
+                                }
+                            )
                         }
                     }
                 } else {
@@ -239,6 +255,93 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
                     }
                 }
             }
+        }
+    }
+
+    if (showBottomSheet && selectedChatItemForMenu != null) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheet = false },
+            sheetState = sheetState,
+            containerColor = Color(0xFF1C1C1E), // Dark professional background
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color.Gray) },
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            ChatListMenuContent(
+                chatItem = selectedChatItemForMenu!!,
+                onAction = { action ->
+                    showBottomSheet = false
+                    currentUser?.let { user ->
+                        val partnerId = selectedChatItemForMenu!!.partner.id
+                        scope.launch {
+                            when (action) {
+                                "pin" -> repository.togglePinChat(user.uid, partnerId, !selectedChatItemForMenu!!.isPinned)
+                                "delete" -> repository.deleteConversation(user.uid, partnerId)
+                                "mute_messages" -> repository.toggleMuteChat(user.uid, partnerId, !selectedChatItemForMenu!!.isMuted)
+                                "mute_calls" -> { /* Logic for muting calls */ }
+                            }
+                        }
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun ChatListMenuContent(chatItem: ChatListItem, onAction: (String) -> Unit) {
+    val partner = chatItem.partner
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 32.dp)
+    ) {
+        Text(
+            text = "${partner.first_name} ${partner.last_name} 🦋".uppercase(),
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(24.dp)
+        )
+        
+        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+        MenuItem(
+            title = if (chatItem.isPinned) "Unpin" else "Pin", 
+            icon = if (chatItem.isPinned) Icons.Default.PushPin else Icons.Default.PushPin, 
+            onClick = { onAction("pin") }
+        )
+        MenuItem(title = "Delete", icon = Icons.Default.Delete, color = Color.Red, onClick = { onAction("delete") })
+        MenuItem(
+            title = if (chatItem.isMuted) "Unmute messages" else "Mute messages", 
+            icon = Icons.Default.NotificationsOff, 
+            onClick = { onAction("mute_messages") }
+        )
+        MenuItem(title = "Mute calls", icon = Icons.Default.CallEnd, onClick = { onAction("mute_calls") })
+    }
+}
+
+@Composable
+fun MenuItem(
+    title: String,
+    icon: ImageVector,
+    color: Color = Color.White,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                color = color,
+                fontSize = 17.sp,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -373,8 +476,14 @@ fun ModernRequestItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ModernChatItem(chatItem: ChatListItem, currentUserId: String?, onChatClick: (String, String) -> Unit) {
+fun ModernChatItem(
+    chatItem: ChatListItem, 
+    currentUserId: String?, 
+    onChatClick: (String, String) -> Unit,
+    onLongClick: () -> Unit
+) {
     val partner = chatItem.partner
     val lastMessage = chatItem.lastMessage
     val unreadCount = chatItem.unreadCount
@@ -409,7 +518,10 @@ fun ModernChatItem(chatItem: ChatListItem, currentUserId: String?, onChatClick: 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onChatClick("${partner.first_name} ${partner.last_name}", partner.id) },
+            .combinedClickable(
+                onClick = { onChatClick("${partner.first_name} ${partner.last_name}", partner.id) },
+                onLongClick = onLongClick
+            ),
         shape = RoundedCornerShape(24.dp),
         color = Color.White,
         shadowElevation = 1.dp
@@ -449,6 +561,14 @@ fun ModernChatItem(chatItem: ChatListItem, currentUserId: String?, onChatClick: 
                         color = Color.Black,
                         modifier = Modifier.weight(1f)
                     )
+                    if (chatItem.isPinned) {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = "Pinned",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(14.dp).padding(end = 4.dp)
+                        )
+                    }
                     Text(
                         text = time,
                         fontSize = 11.sp,
@@ -514,7 +634,8 @@ fun ModernChatItemPreview() {
     ModernChatItem(
         chatItem = dummyChatItem,
         currentUserId = "current_user_id",
-        onChatClick = { _, _ -> }
+        onChatClick = { _, _ -> },
+        onLongClick = {}
     )
 }
 

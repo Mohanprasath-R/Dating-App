@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
@@ -34,9 +35,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zegocloud.uikit.prebuilt.call.invite.ZegoUIKitPrebuiltCallInvitationConfig
@@ -198,6 +203,16 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
 
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var audioFile by remember { mutableStateOf<File?>(null) }
+    
+    // Message Options State
+    var selectedMessageForMenu by remember { mutableStateOf<Message?>(null) }
+    var replyingToMessage by remember { mutableStateOf<Message?>(null) }
+    var editingMessage by remember { mutableStateOf<Message?>(null) }
+    var forwardingMessage by remember { mutableStateOf<Message?>(null) }
+    var showForwardDialog by remember { mutableStateOf(false) }
+    
+    val haptic = LocalHapticFeedback.current
+    val clipboardManager = LocalClipboardManager.current
     var recordingStartTime by remember { mutableLongStateOf(0L) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -497,40 +512,93 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                 )
             },
             bottomBar = {
-                ChatBottomBar(
-                    messageText = messageText,
-                    isRecording = isRecording,
-                    onValueChange = { messageText = it },
-                    onAttachClick = { mediaPickerLauncher.launch("*/*") },
-                    onSendClick = {
-                        if (messageText.isNotBlank()) {
-                            if (SecurityUtils.isSpam(messageText)) {
-                                Toast.makeText(context, "Spam detected!", Toast.LENGTH_SHORT).show()
-                                return@ChatBottomBar
-                            }
-                            val textToSend = if (isE2EEEnabled && chatKey != null) {
-                                SecurityUtils.encrypt(messageText, chatKey)
-                            } else messageText
-
-                            scope.launch {
-                                currentUser?.let {
-                                    repository.sendMessage(Message(
-                                        senderId = it.uid,
-                                        receiverId = receiverId,
-                                        messageText = textToSend,
-                                        encrypted = isE2EEEnabled,
-                                        selfDestructAt = if (selfDestructSeconds > 0) System.currentTimeMillis() + (selfDestructSeconds * 1000) else null,
-                                        timestamp = System.currentTimeMillis()
-                                    ))
+                Column {
+                    if (replyingToMessage != null || editingMessage != null) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color.White,
+                            shadowElevation = 4.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (editingMessage != null) Icons.Default.Edit else Icons.AutoMirrored.Filled.Reply,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFC2C5A),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (editingMessage != null) "Editing Message" else "Replying to ${if (replyingToMessage?.senderId == currentUser?.uid) "yourself" else receiverUser?.first_name}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFFFC2C5A)
+                                    )
+                                    Text(
+                                        text = (editingMessage ?: replyingToMessage)?.messageText ?: "",
+                                        maxLines = 1,
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    replyingToMessage = null
+                                    editingMessage = null
+                                    if (editingMessage != null) messageText = ""
+                                }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Cancel", modifier = Modifier.size(20.dp))
                                 }
                             }
-                            messageText = ""
                         }
-                    },
-                    onMicClick = { startRecording() },
-                    onSendVoice = { stopRecording(true) },
-                    onCancelVoice = { stopRecording(false) }
-                )
+                    }
+                    ChatBottomBar(
+                        messageText = messageText,
+                        isRecording = isRecording,
+                        onValueChange = { messageText = it },
+                        onAttachClick = { mediaPickerLauncher.launch("*/*") },
+                        onSendClick = {
+                            if (messageText.isNotBlank()) {
+                                if (SecurityUtils.isSpam(messageText)) {
+                                    Toast.makeText(context, "Spam detected!", Toast.LENGTH_SHORT).show()
+                                    return@ChatBottomBar
+                                }
+                                val textToSend = if (isE2EEEnabled && chatKey != null) {
+                                    SecurityUtils.encrypt(messageText, chatKey)
+                                } else messageText
+
+                                scope.launch {
+                                    currentUser?.let {
+                                        if (editingMessage != null) {
+                                            repository.updateMessage(editingMessage!!.id, mapOf(
+                                                "messageText" to textToSend,
+                                                "edited" to true
+                                            ))
+                                            editingMessage = null
+                                        } else {
+                                            repository.sendMessage(Message(
+                                                senderId = it.uid,
+                                                receiverId = receiverId,
+                                                messageText = textToSend,
+                                                encrypted = isE2EEEnabled,
+                                                replyToId = replyingToMessage?.id,
+                                                selfDestructAt = if (selfDestructSeconds > 0) System.currentTimeMillis() + (selfDestructSeconds * 1000) else null,
+                                                timestamp = System.currentTimeMillis()
+                                            ))
+                                            replyingToMessage = null
+                                        }
+                                    }
+                                }
+                                messageText = ""
+                            }
+                        },
+                        onMicClick = { startRecording() },
+                        onSendVoice = { stopRecording(true) },
+                        onCancelVoice = { stopRecording(false) }
+                    )
+                }
             }
         ) { padding ->
             LazyColumn(
@@ -561,9 +629,8 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                             }
                         },
                         onLongClick = {
-                            if (message.senderId == currentUser?.uid) {
-                                scope.launch { repository.deleteMessage(message.id) }
-                            }
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selectedMessageForMenu = message
                         }
                     )
                 }
@@ -571,8 +638,352 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
             LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
         }
 
+        if (selectedMessageForMenu != null) {
+            MessageOptionsMenu(
+                message = selectedMessageForMenu!!,
+                isMe = selectedMessageForMenu!!.senderId == currentUser?.uid,
+                onReaction = { emoji ->
+                    scope.launch {
+                        currentUser?.let { repository.addReaction(selectedMessageForMenu!!.id, it.uid, emoji) }
+                    }
+                },
+                onReply = { replyingToMessage = selectedMessageForMenu },
+                onEdit = { editingMessage = selectedMessageForMenu; messageText = selectedMessageForMenu!!.messageText },
+                onForward = { 
+                    forwardingMessage = selectedMessageForMenu
+                    showForwardDialog = true
+                },
+                onCopy = {
+                    val content = if (selectedMessageForMenu!!.encrypted && chatKey != null) {
+                        SecurityUtils.decrypt(selectedMessageForMenu!!.messageText, chatKey)
+                    } else selectedMessageForMenu!!.messageText
+                    clipboardManager.setText(AnnotatedString(content))
+                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                },
+                onUnsend = {
+                    scope.launch { repository.deleteMessage(selectedMessageForMenu!!.id) }
+                },
+                onDismiss = { selectedMessageForMenu = null }
+            )
+        }
+
         if (activeVideoUri != null) VideoPlayerDialog(uri = activeVideoUri!!) { activeVideoUri = null }
         if (activeImageUri != null) ImagePreviewDialog(uri = activeImageUri!!) { activeImageUri = null }
+
+        if (showForwardDialog && forwardingMessage != null) {
+            ForwardMessageDialog(
+                message = forwardingMessage!!,
+                onDismiss = { 
+                    showForwardDialog = false
+                    forwardingMessage = null
+                },
+                onForwardTo = { partnerId ->
+                    scope.launch {
+                        val forwardedMsg = forwardingMessage!!.copy(
+                            id = "",
+                            senderId = currentUser?.uid ?: "",
+                            receiverId = partnerId,
+                            timestamp = System.currentTimeMillis(),
+                            isRead = false,
+                            reactions = emptyMap()
+                        )
+                        repository.sendMessage(forwardedMsg)
+                        Toast.makeText(context, "Message forwarded", Toast.LENGTH_SHORT).show()
+                        showForwardDialog = false
+                        forwardingMessage = null
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun ForwardMessageDialog(
+    message: Message,
+    onDismiss: () -> Unit,
+    onForwardTo: (String) -> Unit
+) {
+    val repository = remember { FirebaseRepository() }
+    val currentUser = remember { FirebaseAuth.getInstance().currentUser }
+    var matches by remember { mutableStateOf<List<User>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var searchQuery by remember { mutableStateOf("") }
+    var forwardedUserIds by remember { mutableStateOf(setOf<String>()) }
+
+    LaunchedEffect(Unit) {
+        currentUser?.let {
+            repository.getMatches(it.uid).onSuccess { list ->
+                matches = list
+                isLoading = false
+            }
+        }
+    }
+
+    val filteredMatches = remember(matches, searchQuery) {
+        if (searchQuery.isEmpty()) matches
+        else matches.filter { 
+            it.first_name.contains(searchQuery, ignoreCase = true) || 
+            it.last_name.contains(searchQuery, ignoreCase = true) 
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .fillMaxHeight(0.7f),
+            shape = RoundedCornerShape(32.dp),
+            color = Color.White,
+            shadowElevation = 16.dp
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Forward to",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.Black
+                        )
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.background(Color(0xFFF5F5F5), CircleShape).size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(18.dp), tint = Color.Gray)
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Search Bar
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        placeholder = { Text("Search friends...", color = Color.Gray, fontSize = 14.sp) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFFFC2C5A)) },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFFF8F8F8),
+                            unfocusedContainerColor = Color(0xFFF8F8F8),
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        singleLine = true
+                    )
+                }
+
+                HorizontalDivider(color = Color(0xFFEEEEEE))
+
+                // List
+                Box(modifier = Modifier.weight(1f)) {
+                    if (isLoading) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Color(0xFFFC2C5A))
+                        }
+                    } else if (filteredMatches.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("No connections found", color = Color.Gray)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(filteredMatches) { user ->
+                                val isForwarded = forwardedUserIds.contains(user.id)
+                                
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .clickable(enabled = !isForwarded) { 
+                                            forwardedUserIds = forwardedUserIds + user.id
+                                            onForwardTo(user.id)
+                                        },
+                                    color = Color.Transparent
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AsyncImage(
+                                            model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(52.dp)
+                                                .clip(CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                "${user.first_name} ${user.last_name}",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 16.sp,
+                                                color = Color.Black
+                                            )
+                                            Text(
+                                                if (user.is_online) "Online" else "Recently active",
+                                                fontSize = 12.sp,
+                                                color = if (user.is_online) Color(0xFF4CAF50) else Color.Gray
+                                            )
+                                        }
+
+                                        Button(
+                                            onClick = { 
+                                                forwardedUserIds = forwardedUserIds + user.id
+                                                onForwardTo(user.id)
+                                            },
+                                            enabled = !isForwarded,
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (isForwarded) Color(0xFFEEEEEE) else Color(0xFFFC2C5A),
+                                                contentColor = if (isForwarded) Color.Gray else Color.White
+                                            ),
+                                            shape = RoundedCornerShape(12.dp),
+                                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                                            modifier = Modifier.height(36.dp)
+                                        ) {
+                                            Text(
+                                                if (isForwarded) "Sent" else "Send",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Footer
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFFF8F8F8)
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.padding(16.dp).fillMaxWidth()
+                    ) {
+                        Text("Done", color = Color(0xFFFC2C5A), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MessageOptionsMenu(
+    message: Message,
+    isMe: Boolean,
+    onReaction: (String) -> Unit,
+    onReply: () -> Unit,
+    onEdit: () -> Unit,
+    onForward: () -> Unit,
+    onCopy: () -> Unit,
+    onUnsend: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(280.dp)
+                    .background(Color(0xFF2C2C2E), RoundedCornerShape(24.dp))
+                    .padding(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Reactions Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    val reactions = listOf("❤️", "😂", "😮", "😢", "😡", "👍")
+                    reactions.forEach { emoji ->
+                        Text(
+                            text = emoji,
+                            fontSize = 28.sp,
+                            modifier = Modifier
+                                .clickable { onReaction(emoji); onDismiss() }
+                                .padding(4.dp)
+                        )
+                    }
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "More",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .padding(4.dp)
+                    )
+                }
+
+                HorizontalDivider(color = Color.DarkGray)
+
+                // Menu Options
+                MenuOptionItem("Reply", Icons.AutoMirrored.Filled.Reply, Color.White) { onReply(); onDismiss() }
+                if (isMe && message.messageType == MessageType.TEXT) {
+                    MenuOptionItem("Edit", Icons.Default.Edit, Color.White) { onEdit(); onDismiss() }
+                }
+                MenuOptionItem("Forward", Icons.Default.Send, Color.White) { onForward(); onDismiss() }
+                if (message.messageType == MessageType.TEXT) {
+                    MenuOptionItem("Copy", Icons.Default.ContentCopy, Color.White) { onCopy(); onDismiss() }
+                }
+                MenuOptionItem("Make AI image", Icons.Default.AutoAwesome, Color.White) { /* AI Logic */ onDismiss() }
+                
+                if (isMe) {
+                    MenuOptionItem("Unsend", Icons.Default.Undo, Color.Red) { onUnsend(); onDismiss() }
+                }
+                
+                MenuOptionItem("More", Icons.Default.MoreHoriz, Color.White) { onDismiss() }
+            }
+        }
+    }
+}
+
+@Composable
+fun MenuOptionItem(text: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(text = text, color = color, fontSize = 16.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -620,45 +1031,122 @@ fun ChatBubble(
                 .widthIn(max = if (message.messageType == MessageType.TEXT) 300.dp else 260.dp)
                 .combinedClickable(onClick = onMediaClick, onLongClick = onLongClick)
         ) {
-            if (message.deletedForEveryone) {
-                Text(text = "This message was deleted", modifier = Modifier.padding(12.dp), color = Color.Gray, fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
-            } else {
-                when (message.messageType) {
-                    MessageType.TEXT -> {
-                        val displayContent = if (message.encrypted) {
-                            if (chatKey != null) {
-                                SecurityUtils.decrypt(message.messageText, chatKey)
-                            } else {
-                                "[Encrypted Message]"
-                            }
-                        } else message.messageText
-                        
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = displayContent, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = textColor, fontSize = 14.sp)
-                            if (message.encrypted) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock, 
-                                    contentDescription = null, 
-                                    tint = textColor.copy(alpha = 0.5f), 
-                                    modifier = Modifier.size(10.dp).padding(end = 8.dp)
+            Box(contentAlignment = Alignment.BottomEnd) {
+                if (message.deletedForEveryone) {
+                    Text(
+                        text = "This message was deleted",
+                        modifier = Modifier.padding(12.dp),
+                        color = Color.Gray,
+                        fontSize = 14.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+                } else {
+                    Column {
+                        if (message.replyToId != null) {
+                            Surface(
+                                color = Color.Black.copy(alpha = 0.05f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.padding(8.dp)
+                            ) {
+                                Text(
+                                    text = "Replying to message",
+                                    modifier = Modifier.padding(8.dp),
+                                    fontSize = 12.sp,
+                                    color = textColor.copy(alpha = 0.7f)
                                 )
                             }
                         }
+
+                        when (message.messageType) {
+                            MessageType.TEXT -> {
+                                val displayContent = if (message.encrypted) {
+                                    if (chatKey != null) {
+                                        SecurityUtils.decrypt(message.messageText, chatKey)
+                                    } else {
+                                        "[Encrypted Message]"
+                                    }
+                                } else message.messageText
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = displayContent,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        color = textColor,
+                                        fontSize = 14.sp
+                                    )
+                                    if (message.encrypted) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = null,
+                                            tint = textColor.copy(alpha = 0.5f),
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .padding(end = 8.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            MessageType.AUDIO -> {
+                                val senderProfileImage =
+                                    if (isMe) currentUserProfile?.profile_image else receiverUser?.profile_image
+                                AudioMessageItem(
+                                    senderProfileImage,
+                                    isMe,
+                                    isPlaying,
+                                    playbackProgress,
+                                    currentPositionText,
+                                    message.id.hashCode(),
+                                    onMediaClick
+                                )
+                            }
+                            MessageType.VIDEO -> VideoMessageItem(message, onMediaClick)
+                            MessageType.IMAGE -> ImageMessageItem(message, onMediaClick)
+                        }
                     }
-                    MessageType.AUDIO -> {
-                        val senderProfileImage = if (isMe) currentUserProfile?.profile_image else receiverUser?.profile_image
-                        AudioMessageItem(senderProfileImage, isMe, isPlaying, playbackProgress, currentPositionText, message.id.hashCode(), onMediaClick)
+                }
+
+                // Reactions Display
+                if (message.reactions.isNotEmpty() && !message.deletedForEveryone) {
+                    Row(
+                        modifier = Modifier
+                            .padding(end = 4.dp, bottom = 4.dp)
+                            .background(Color.White, CircleShape)
+                            .border(1.dp, Color.LightGray.copy(alpha = 0.2f), CircleShape)
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val reactionList = message.reactions.values.distinct().take(3)
+                        reactionList.forEach { emoji ->
+                            Text(text = emoji, fontSize = 10.sp)
+                        }
+                        if (message.reactions.size > 1) {
+                            Text(
+                                text = message.reactions.size.toString(),
+                                fontSize = 8.sp,
+                                modifier = Modifier.padding(start = 2.dp),
+                                color = Color.Gray
+                            )
+                        }
                     }
-                    MessageType.VIDEO -> VideoMessageItem(message, onMediaClick)
-                    MessageType.IMAGE -> ImageMessageItem(message, onMediaClick)
                 }
             }
         }
-        Row(modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(text = time, fontSize = 10.sp, color = Color.Gray)
+            if (message.edited) {
+                Text(text = " • Edited", fontSize = 10.sp, color = Color.Gray)
+            }
             if (isMe) {
                 Spacer(modifier = Modifier.width(4.dp))
-                Icon(imageVector = Icons.Default.DoneAll, contentDescription = null, tint = if (message.isRead) Color(0xFFFC2C5A) else Color.Gray, modifier = Modifier.size(12.dp))
+                Icon(
+                    imageVector = Icons.Default.DoneAll,
+                    contentDescription = null,
+                    tint = if (message.isRead) Color(0xFFFC2C5A) else Color.Gray,
+                    modifier = Modifier.size(12.dp)
+                )
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.example.dating_app.model
 
 import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 
 object MessageType {
     const val TEXT = "TEXT"
@@ -16,7 +17,9 @@ data class Message(
     val receiverId: String = "",
     val messageText: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val isRead: Boolean = false,
+    @get:PropertyName("isRead")
+    @set:PropertyName("isRead")
+    var isRead: Boolean = false,
     val messageType: String = MessageType.TEXT,
     val mediaUrl: String? = null,
     val mediaPublicId: String? = null,

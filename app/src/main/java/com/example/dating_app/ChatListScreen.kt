@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +50,12 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
     val repository = remember { FirebaseRepository() }
     val currentUser = remember { FirebaseAuth.getInstance().currentUser }
     val scope = rememberCoroutineScope()
-    var chats by remember { mutableStateOf<List<ChatListItem>>(emptyList()) }
+    
+    // Real-time Chat List
+    val chats by remember(currentUser?.uid) {
+        currentUser?.let { repository.observeChatList(it.uid) } ?: flowOf(emptyList<ChatListItem>())
+    }.collectAsState(initial = emptyList())
+
     var requests by remember { mutableStateOf<List<User>>(emptyList()) }
     var currentUserProfile by remember { mutableStateOf<User?>(null) }
     var onlineUsers by remember { mutableStateOf<List<User>>(emptyList()) }
@@ -59,9 +65,7 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
     var localRefreshTrigger by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(refreshTrigger, localRefreshTrigger) {
-        isLoading = true
         currentUser?.let { user ->
-            repository.getChatList(user.uid).onSuccess { list -> chats = list }
             repository.getMatches(user.uid).onSuccess { matches -> 
                 onlineUsers = matches.filter { u -> u.is_online }
             }

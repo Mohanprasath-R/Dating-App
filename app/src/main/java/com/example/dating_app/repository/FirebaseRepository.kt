@@ -14,9 +14,12 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 data class ChatListItem(
@@ -423,26 +426,29 @@ class FirebaseRepository {
     }
 
     fun getMessages(userId1: String, userId2: String): Flow<List<Message>> = callbackFlow {
-        // Use a simpler query to avoid complex index requirements initially
-        // We fetch messages where the sender is one of the two participants
-        val subscription = messagesCollection
-            .whereIn("senderId", listOf(userId1, userId2))
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    // Log error instead of closing with exception to prevent crash
-                    android.util.Log.e("FirebaseRepository", "Firestore Error: ${error.message}")
-                    return@addSnapshotListener
-                }
-                
-                val allMessages = snapshot?.toObjects(Message::class.java) ?: emptyList()
-                // Filter specifically for the conversation between these two and sort in memory
-                val filteredMessages = allMessages.filter { 
-                    (it.senderId == userId1 && it.receiverId == userId2) ||
-                    (it.senderId == userId2 && it.receiverId == userId1)
-                }.sortedBy { it.timestamp }
+        // Optimized query to fetch only messages between these two users
+        val messagesQuery = messagesCollection.where(
+            com.google.firebase.firestore.Filter.or(
+                com.google.firebase.firestore.Filter.and(
+                    com.google.firebase.firestore.Filter.equalTo("senderId", userId1),
+                    com.google.firebase.firestore.Filter.equalTo("receiverId", userId2)
+                ),
+                com.google.firebase.firestore.Filter.and(
+                    com.google.firebase.firestore.Filter.equalTo("senderId", userId2),
+                    com.google.firebase.firestore.Filter.equalTo("receiverId", userId1)
+                )
+            )
+        )
 
-                trySend(filteredMessages)
+        val subscription = messagesQuery.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                android.util.Log.e("FirebaseRepository", "Firestore Error: ${error.message}")
+                return@addSnapshotListener
             }
+            
+            val messages = snapshot?.toObjects(Message::class.java) ?: emptyList()
+            trySend(messages.sortedBy { it.timestamp })
+        }
         awaitClose { subscription.remove() }
     }
 
@@ -496,9 +502,9 @@ class FirebaseRepository {
 
             // Fetch from server to avoid stale cache
             val sentSnapshot = messagesCollection.whereEqualTo("senderId", currentUserId)
-                .get(com.google.firebase.firestore.Source.SERVER).await()
+                .get().await()
             val receivedSnapshot = messagesCollection.whereEqualTo("receiverId", currentUserId)
-                .get(com.google.firebase.firestore.Source.SERVER).await()
+                .get().await()
             
             val allMessages = (sentSnapshot.toObjects(Message::class.java) + 
                               receivedSnapshot.toObjects(Message::class.java))
@@ -526,6 +532,70 @@ class FirebaseRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    fun observeChatList(currentUserId: String): Flow<List<ChatListItem>> = callbackFlow {
+        // Use a single listener for messages where the user is a participant
+        val messagesQuery = messagesCollection.where(
+            com.google.firebase.firestore.Filter.or(
+                com.google.firebase.firestore.Filter.equalTo("senderId", currentUserId),
+                com.google.firebase.firestore.Filter.equalTo("receiverId", currentUserId)
+            )
+        )
+
+        val subscription = messagesQuery.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                android.util.Log.e("FirebaseRepository", "Chat List Error: ${error.message}")
+                return@addSnapshotListener
+            }
+
+            val allMessages = snapshot?.toObjects(Message::class.java) ?: emptyList()
+            if (allMessages.isEmpty()) {
+                trySend(emptyList())
+                return@addSnapshotListener
+            }
+
+            // Group messages by partner ID
+            val partnersWithMessages = allMessages.groupBy { 
+                if (it.senderId == currentUserId) it.receiverId else it.senderId 
+            }
+
+            launch {
+                try {
+                    // Fetch blocked users and partner profiles
+                    val blockedSnapshot = firestore.collection("blocked_users")
+                        .whereEqualTo("blockerId", currentUserId)
+                        .get().await()
+                    val blockedIds = blockedSnapshot.documents.mapNotNull { it.getString("blockedId") }.toSet()
+
+                    val resultList = mutableListOf<ChatListItem>()
+                    
+                    for ((partnerId, partnerMessages) in partnersWithMessages) {
+                        if (partnerId in blockedIds || partnerId.isEmpty()) continue
+                        
+                        // Use a cached user fetch if possible
+                        val partner = getUser(partnerId).getOrNull()
+                        if (partner != null) {
+                            val sortedMessages = partnerMessages.sortedByDescending { it.timestamp }
+                            val lastMessage = sortedMessages.firstOrNull()
+                            // Calculate unread count specifically for messages received BY the current user
+                            val unreadCount = partnerMessages.count { 
+                                it.receiverId == currentUserId && !it.isRead && !it.deletedForEveryone 
+                            }
+                            
+                            resultList.add(ChatListItem(partner, lastMessage, unreadCount))
+                        }
+                    }
+                    
+                    // Send the final sorted list
+                    trySend(resultList.sortedByDescending { it.lastMessage?.timestamp ?: 0L })
+                } catch (e: Exception) {
+                    android.util.Log.e("FirebaseRepository", "Error processing chat list: ${e.message}")
+                }
+            }
+        }
+        
+        awaitClose { subscription.remove() }
     }
 
     suspend fun blockUser(blockerId: String, blockedId: String): Result<Unit> {
@@ -708,6 +778,7 @@ class FirebaseRepository {
 
     suspend fun markMessagesAsRead(currentUserId: String, chatPartnerId: String): Result<Unit> {
         return try {
+            // Remove Source.SERVER to ensure we catch all messages regardless of sync status
             val unreadMessages = messagesCollection
                 .whereEqualTo("receiverId", currentUserId)
                 .whereEqualTo("senderId", chatPartnerId)
@@ -715,14 +786,17 @@ class FirebaseRepository {
                 .get()
                 .await()
 
-            if (unreadMessages.isEmpty) return Result.success(Unit)
+            if (unreadMessages.isEmpty) {
+                android.util.Log.d("FirebaseRepository", "No unread messages to mark for $chatPartnerId")
+                return Result.success(Unit)
+            }
 
             val batch = firestore.batch()
             for (doc in unreadMessages.documents) {
                 batch.update(doc.reference, "isRead", true)
             }
             batch.commit().await()
-            android.util.Log.d("FirebaseRepository", "Marked ${unreadMessages.size()} messages as read for $currentUserId")
+            android.util.Log.d("FirebaseRepository", "Successfully marked ${unreadMessages.size()} messages as read from $chatPartnerId")
             Result.success(Unit)
         } catch (e: Exception) {
             android.util.Log.e("FirebaseRepository", "Error marking messages as read: ${e.message}")
@@ -750,7 +824,24 @@ class FirebaseRepository {
             .whereEqualTo("isRead", false)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) return@addSnapshotListener
-                trySend(snapshot?.size() ?: 0)
+                
+                val unreadMessages = snapshot?.toObjects(Message::class.java) ?: emptyList()
+                if (unreadMessages.isEmpty()) {
+                    trySend(0)
+                    return@addSnapshotListener
+                }
+
+                firestore.collection("blocked_users")
+                    .whereEqualTo("blockerId", userId)
+                    .get()
+                    .addOnSuccessListener { blockedSnapshot ->
+                        val blockedIds = blockedSnapshot.documents.mapNotNull { it.getString("blockedId") }.toSet()
+                        val filteredCount = unreadMessages.count { it.senderId !in blockedIds }
+                        trySend(filteredCount)
+                    }
+                    .addOnFailureListener {
+                        trySend(unreadMessages.size)
+                    }
             }
         awaitClose { subscription.remove() }
     }
@@ -763,6 +854,33 @@ class FirebaseRepository {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) return@addSnapshotListener
                 trySend(snapshot?.toObjects(Message::class.java)?.firstOrNull())
+            }
+        awaitClose { subscription.remove() }
+    }
+
+    fun observeLikedByCount(userId: String): Flow<Int> = callbackFlow {
+        val subscription = firestore.collection("liked_profiles")
+            .whereEqualTo("toUserId", userId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                
+                val docs = snapshot?.documents ?: emptyList()
+                if (docs.isEmpty()) {
+                    trySend(0)
+                    return@addSnapshotListener
+                }
+
+                firestore.collection("blocked_users")
+                    .whereEqualTo("blockerId", userId)
+                    .get()
+                    .addOnSuccessListener { blockedSnapshot ->
+                        val blockedIds = blockedSnapshot.documents.mapNotNull { it.getString("blockedId") }.toSet()
+                        val filteredCount = docs.count { it.getString("fromUserId") !in blockedIds }
+                        trySend(filteredCount)
+                    }
+                    .addOnFailureListener {
+                        trySend(docs.size)
+                    }
             }
         awaitClose { subscription.remove() }
     }

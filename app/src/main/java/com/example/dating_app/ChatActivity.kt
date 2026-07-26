@@ -145,14 +145,26 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
             }
         }
         if (currentUser != null && receiverId.isNotEmpty()) {
+            // Aggressive mark as read on entry
+            repository.markMessagesAsRead(currentUser.uid, receiverId)
+            
             repository.getMessages(currentUser.uid, receiverId).collectLatest { updatedMessages ->
                 messages.clear()
                 messages.addAll(updatedMessages)
+                
+                // Mark incoming messages as read while chat is open
+                val unreadIds = updatedMessages.filter { 
+                    it.receiverId == currentUser.uid && !it.isRead 
+                }.map { it.id }
+                
+                if (unreadIds.isNotEmpty()) {
+                    repository.markMessagesAsReadByIds(unreadIds)
+                }
             }
         }
     }
 
-    // Mark messages as read when seen
+    // Secondary safety check to mark as read when messages list changes
     LaunchedEffect(messages.toList()) {
         if (currentUser != null && receiverId.isNotEmpty()) {
             val unreadIds = messages.filter { 

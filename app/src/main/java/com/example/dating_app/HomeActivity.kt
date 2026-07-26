@@ -99,9 +99,20 @@ class HomeActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
+            val scope = rememberCoroutineScope()
+            val repository = remember { FirebaseRepository() }
+            val auth = remember { FirebaseAuth.getInstance() }
+            
             MaterialTheme {
                 HomeScreen(
                     onChatClick = { name, id ->
+                        // Mark as read immediately when clicking to update UI faster
+                        scope.launch {
+                            auth.currentUser?.uid?.let { uid ->
+                                repository.markMessagesAsRead(uid, id)
+                            }
+                        }
+
                         val intent = Intent(this, ChatActivity::class.java)
                         intent.putExtra("CHAT_NAME", name)
                         intent.putExtra("RECEIVER_ID", id)
@@ -214,10 +225,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
     var incomingCall by remember { mutableStateOf<Call?>(null) }
     var showAstrologyModal by remember { mutableStateOf(false) }
     var unreadMessageCount by remember { mutableIntStateOf(0) }
+    var unreadLikesCount by remember { mutableIntStateOf(0) }
     var lastReceivedMessage by remember { mutableStateOf<Message?>(null) }
     var showNotificationBanner by remember { mutableStateOf(false) }
 
-    // Fetch Current User Data & Observe Unread Count
+    // Fetch Current User Data & Observe Unread Counts
     LaunchedEffect(Unit) {
         auth.currentUser?.uid?.let { uid ->
             repository.getUser(uid).onSuccess { user ->
@@ -231,6 +243,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
             repository.observeUnreadMessageCount(uid).collectLatest { count ->
                 unreadMessageCount = count
                 refreshTrigger++ // Refresh list when unread status changes anywhere
+            }
+
+            // Real-time Likes Count Observation
+            repository.observeLikedByCount(uid).collectLatest { count ->
+                unreadLikesCount = count
             }
         }
     }
@@ -713,15 +730,17 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                                 badge = {
                                                     when (tab) {
                                                         HomeTab.Likes -> {
-                                                            Badge(
-                                                                containerColor = Color(0xFFFF2D6C),
-                                                                modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
-                                                            ) { 
-                                                                Text("3", color = Color.White, fontSize = 9.sp) 
+                                                            if (unreadLikesCount > 0) {
+                                                                Badge(
+                                                                    containerColor = Color(0xFFFF2D6C),
+                                                                    modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
+                                                                ) { 
+                                                                    Text(unreadLikesCount.toString(), color = Color.White, fontSize = 9.sp) 
+                                                                }
                                                             }
                                                         }
                                                         HomeTab.Message -> {
-                                                            if (unreadMessageCount > 0) {
+                                                            if (unreadMessageCount > 0 && selectedTab != tab) {
                                                                 Badge(containerColor = Color(0xFFFF2D6C)) { 
                                                                     Text(unreadMessageCount.toString(), color = Color.White, fontSize = 9.sp) 
                                                                 }

@@ -396,33 +396,37 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
             topBar = {
                 TopAppBar(
                     title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            AsyncImage(
-                                model = if (receiverUser?.profile_image?.isNotEmpty() == true) receiverUser?.profile_image else R.drawable.girl,
-                                contentDescription = null,
-                                modifier = Modifier.size(38.dp).clip(CircleShape),
-                                contentScale = ContentScale.Crop,
-                                placeholder = painterResource(id = R.drawable.girl)
+                        Column {
+                            Text(
+                                text = if (receiverUser != null) "${receiverUser?.first_name} ${receiverUser?.last_name}" else chatName,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = if (receiverUser != null) "${receiverUser?.first_name} ${receiverUser?.last_name}" else chatName,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(if (receiverUser?.is_online == true) Color(0xFF4CAF50) else Color.Gray))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(if (receiverUser?.is_online == true) "Online" else "Offline", fontSize = 11.sp, color = Color.Gray)
-                                }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(if (receiverUser?.is_online == true) Color(0xFF4CAF50) else Color.Gray))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (receiverUser?.is_online == true) "Online" else "Offline", fontSize = 11.sp, color = Color.Gray)
                             }
                         }
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.Black)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.Black)
+                            }
+                            AsyncImage(
+                                model = if (receiverUser?.profile_image?.isNotEmpty() == true) receiverUser?.profile_image else R.drawable.girl,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                                placeholder = painterResource(id = R.drawable.girl)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
                         }
                     },
                     actions = {

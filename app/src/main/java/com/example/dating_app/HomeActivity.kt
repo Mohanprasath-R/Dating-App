@@ -392,7 +392,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                 // Drawer Items
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     CustomDrawerItem(
                         label = "Settings",
@@ -539,7 +539,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .height(54.dp),
+                        .height(64.dp),
                     shape = RoundedCornerShape(16.dp),
                     color = Color(0xFFFFEBEE),
                     border = BorderStroke(1.dp, Color(0xFFFFCDD2)),
@@ -2979,7 +2979,7 @@ fun SecurityPrivacyScreen() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .height(56.dp)
+                    .height(64.dp)
                     .clickable { showDeleteDialog = true },
                 shape = RoundedCornerShape(12.dp),
                 color = Color(0xFFFFEBEE),

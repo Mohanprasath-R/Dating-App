@@ -457,29 +457,6 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                         }
                     },
                     actions = {
-                        IconButton(onClick = { isE2EEEnabled = !isE2EEEnabled }) {
-                            Icon(
-                                imageVector = if (isE2EEEnabled) Icons.Default.Https else Icons.Default.LockOpen,
-                                contentDescription = "E2EE",
-                                tint = if (isE2EEEnabled) Color(0xFF4CAF50) else Color.Gray
-                            )
-                        }
-                        IconButton(onClick = {
-                            selfDestructSeconds = when(selfDestructSeconds) {
-                                0 -> 10
-                                10 -> 60
-                                60 -> 3600
-                                else -> 0
-                            }
-                            val msg = if (selfDestructSeconds > 0) "Self-destruct: $selfDestructSeconds sec" else "Self-destruct off"
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Timer,
-                                contentDescription = "Self Destruct",
-                                tint = if (selfDestructSeconds > 0) Color(0xFFFF9800) else Color.Gray
-                            )
-                        }
                         IconButton(onClick = {
                             val invitees = Collections.singletonList(com.zegocloud.uikit.service.defines.ZegoUIKitUser(receiverId, chatName))
                             com.zegocloud.uikit.prebuilt.call.ZegoUIKitPrebuiltCallService.sendInvitationWithUIChange(
@@ -498,13 +475,70 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                         }
                         Box {
                             IconButton(onClick = { showMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "More") }
-                            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                                DropdownMenuItem(text = { Text("View Profile") }, onClick = { showMenu = false })
-                                DropdownMenuItem(text = { Text("Report User") }, onClick = { showMenu = false; showReportDialog = true })
-                                DropdownMenuItem(text = { Text("Block User", color = Color.Red) }, onClick = { 
-                                    showMenu = false 
-                                    scope.launch { currentUser?.let { repository.blockUser(it.uid, receiverId) }; onBack() }
-                                })
+                            DropdownMenu(
+                                expanded = showMenu, 
+                                onDismissRequest = { showMenu = false },
+                                modifier = Modifier.background(Color.White)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("View Profile") },
+                                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                    onClick = { 
+                                        showMenu = false
+                                        val intent = Intent(context, PartnerProfileActivity::class.java)
+                                        intent.putExtra("USER_ID", receiverId)
+                                        context.startActivity(intent)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (isE2EEEnabled) "Disable Encryption" else "Enable Encryption") },
+                                    leadingIcon = { 
+                                        Icon(
+                                            imageVector = if (isE2EEEnabled) Icons.Default.Https else Icons.Default.LockOpen, 
+                                            contentDescription = null,
+                                            tint = if (isE2EEEnabled) Color(0xFF4CAF50) else Color.Gray,
+                                            modifier = Modifier.size(18.dp)
+                                        ) 
+                                    },
+                                    onClick = { 
+                                        isE2EEEnabled = !isE2EEEnabled
+                                        showMenu = false 
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Self-destruct Timer: ${if(selfDestructSeconds > 0) "${selfDestructSeconds}s" else "Off"}") },
+                                    leadingIcon = { 
+                                        Icon(
+                                            Icons.Default.Timer, 
+                                            contentDescription = null, 
+                                            tint = if (selfDestructSeconds > 0) Color(0xFFFF9800) else Color.Gray,
+                                            modifier = Modifier.size(18.dp)
+                                        ) 
+                                    },
+                                    onClick = { 
+                                        selfDestructSeconds = when(selfDestructSeconds) {
+                                            0 -> 10
+                                            10 -> 60
+                                            60 -> 3600
+                                            else -> 0
+                                        }
+                                        showMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Report User") },
+                                    leadingIcon = { Icon(Icons.Default.Report, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                    onClick = { showMenu = false; showReportDialog = true }
+                                )
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color.LightGray.copy(alpha = 0.2f))
+                                DropdownMenuItem(
+                                    text = { Text("Block User", color = Color.Red) },
+                                    leadingIcon = { Icon(Icons.Default.Block, contentDescription = null, tint = Color.Red, modifier = Modifier.size(18.dp)) },
+                                    onClick = { 
+                                        showMenu = false 
+                                        scope.launch { currentUser?.let { repository.blockUser(it.uid, receiverId) }; onBack() }
+                                    }
+                                )
                             }
                         }
                     },
@@ -537,8 +571,15 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                                         fontSize = 12.sp,
                                         color = Color(0xFFFC2C5A)
                                     )
+                                    val previewText = remember(replyingToMessage, editingMessage, chatKey) {
+                                        val msg = editingMessage ?: replyingToMessage
+                                        if (msg == null) ""
+                                        else if (msg.encrypted && chatKey != null) {
+                                            try { SecurityUtils.decrypt(msg.messageText, chatKey) } catch (e: Exception) { msg.messageText }
+                                        } else msg.messageText
+                                    }
                                     Text(
-                                        text = (editingMessage ?: replyingToMessage)?.messageText ?: "",
+                                        text = previewText,
                                         maxLines = 1,
                                         fontSize = 12.sp,
                                         color = Color.Gray
@@ -607,7 +648,8 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(messages) { message ->
+                val filteredMessages = messages.filter { !it.deletedForMe.contains(currentUser?.uid ?: "") }
+                items(filteredMessages) { message ->
                     ChatBubble(
                         message = message,
                         currentUserId = currentUser?.uid ?: "",
@@ -648,7 +690,12 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                     }
                 },
                 onReply = { replyingToMessage = selectedMessageForMenu },
-                onEdit = { editingMessage = selectedMessageForMenu; messageText = selectedMessageForMenu!!.messageText },
+                onEdit = { 
+                    editingMessage = selectedMessageForMenu
+                    messageText = if (selectedMessageForMenu!!.encrypted && chatKey != null) {
+                        try { SecurityUtils.decrypt(selectedMessageForMenu!!.messageText, chatKey) } catch (e: Exception) { selectedMessageForMenu!!.messageText }
+                    } else selectedMessageForMenu!!.messageText
+                },
                 onForward = { 
                     forwardingMessage = selectedMessageForMenu
                     showForwardDialog = true
@@ -662,6 +709,9 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                 },
                 onUnsend = {
                     scope.launch { repository.deleteMessage(selectedMessageForMenu!!.id) }
+                },
+                onDeleteForMe = {
+                    scope.launch { currentUser?.let { repository.deleteMessageForMe(selectedMessageForMenu!!.id, it.uid) } }
                 },
                 onDismiss = { selectedMessageForMenu = null }
             )
@@ -902,6 +952,7 @@ fun MessageOptionsMenu(
     onForward: () -> Unit,
     onCopy: () -> Unit,
     onUnsend: () -> Unit,
+    onDeleteForMe: () -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(
@@ -960,13 +1011,12 @@ fun MessageOptionsMenu(
                 if (message.messageType == MessageType.TEXT) {
                     MenuOptionItem("Copy", Icons.Default.ContentCopy, Color.White) { onCopy(); onDismiss() }
                 }
-                MenuOptionItem("Make AI image", Icons.Default.AutoAwesome, Color.White) { /* AI Logic */ onDismiss() }
                 
                 if (isMe) {
-                    MenuOptionItem("Unsend", Icons.Default.Undo, Color.Red) { onUnsend(); onDismiss() }
+                    MenuOptionItem("Delete for both", Icons.Default.Undo, Color.Red) { onUnsend(); onDismiss() }
                 }
                 
-                MenuOptionItem("More", Icons.Default.MoreHoriz, Color.White) { onDismiss() }
+                MenuOptionItem("Delete for me", Icons.Default.DeleteOutline, Color.White) { onDeleteForMe(); onDismiss() }
             }
         }
     }

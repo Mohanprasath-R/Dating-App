@@ -64,6 +64,9 @@
             android:name="com.example.dating_app.UserProfileActivity"
             android:exported="false" />
         <activity
+            android:name="com.example.dating_app.PartnerProfileActivity"
+            android:exported="false" />
+        <activity
             android:name="com.example.dating_app.ProfileDetailsActivity"
             android:exported="false" />
         <activity

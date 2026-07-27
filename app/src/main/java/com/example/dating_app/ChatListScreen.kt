@@ -293,30 +293,46 @@ fun ChatListMenuContent(chatItem: ChatListItem, onAction: (String) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 32.dp)
+            .padding(bottom = 24.dp)
     ) {
+        // Professional Header
         Text(
             text = "${partner.first_name} ${partner.last_name} 🦋".uppercase(),
             color = Color.White,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(24.dp)
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.sp,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
         )
         
-        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+        HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         MenuItem(
             title = if (chatItem.isPinned) "Unpin" else "Pin", 
             icon = if (chatItem.isPinned) Icons.Default.PushPin else Icons.Default.PushPin, 
             onClick = { onAction("pin") }
         )
-        MenuItem(title = "Delete", icon = Icons.Default.Delete, color = Color.Red, onClick = { onAction("delete") })
+        
+        MenuItem(
+            title = "Delete", 
+            icon = Icons.Default.DeleteOutline, 
+            color = Color(0xFFFF453A), // System Red
+            onClick = { onAction("delete") }
+        )
+        
         MenuItem(
             title = if (chatItem.isMuted) "Unmute messages" else "Mute messages", 
-            icon = Icons.Default.NotificationsOff, 
+            icon = if (chatItem.isMuted) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff, 
             onClick = { onAction("mute_messages") }
         )
-        MenuItem(title = "Mute calls", icon = Icons.Default.CallEnd, onClick = { onAction("mute_calls") })
+        
+        MenuItem(
+            title = "Mute calls", 
+            icon = Icons.Default.PhonePaused, 
+            onClick = { onAction("mute_calls") }
+        )
     }
 }
 
@@ -333,13 +349,32 @@ fun MenuItem(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+            modifier = Modifier
+                .padding(horizontal = 24.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Surface(
+                modifier = Modifier.size(36.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = color.copy(alpha = 0.1f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
             Text(
                 text = title,
                 color = color,
-                fontSize = 17.sp,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f)
             )
         }

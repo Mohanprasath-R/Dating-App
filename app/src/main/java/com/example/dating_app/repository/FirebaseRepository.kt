@@ -418,6 +418,15 @@ class FirebaseRepository {
         }
     }
 
+    suspend fun deleteMessageForMe(messageId: String, userId: String): Result<Unit> {
+        return try {
+            messagesCollection.document(messageId).update("deletedForMe", FieldValue.arrayUnion(userId)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun updateMessage(messageId: String, data: Map<String, Any>): Result<Unit> {
         return try {
             messagesCollection.document(messageId).update(data).await()

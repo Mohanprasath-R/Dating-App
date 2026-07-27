@@ -37,6 +37,7 @@ import java.util.Calendar
 
 @Composable
 fun UserProfileScreen(
+    targetUserId: String? = null,
     onSubScreenChange: (String?) -> Unit = {},
     requestedSubScreen: String? = null,
     onBack: () -> Unit = {}
@@ -60,8 +61,8 @@ fun UserProfileScreen(
         onSubScreenChange(if (currentScreen == "profile") null else currentScreen)
     }
 
-    LaunchedEffect(Unit) {
-        val uid = auth.currentUser?.uid
+    LaunchedEffect(targetUserId) {
+        val uid = targetUserId ?: auth.currentUser?.uid
         if (uid != null) {
             repository.getUser(uid).onSuccess { fetchedUser ->
                 user = fetchedUser

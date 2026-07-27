@@ -27,6 +27,7 @@ data class Message(
     val encrypted: Boolean = false,
     val selfDestructAt: Long? = null,
     val deletedForEveryone: Boolean = false,
+    val deletedForMe: List<String> = emptyList(), // List of user IDs who deleted this for themselves
     val reactions: Map<String, String> = emptyMap(), // userId -> emoji
     val replyToId: String? = null,
     val edited: Boolean = false

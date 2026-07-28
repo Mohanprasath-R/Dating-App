@@ -362,6 +362,7 @@ fun EditProfileView(user: User, onSave: (User) -> Unit, onBack: () -> Unit) {
     var country by remember { mutableStateOf(user.country) }
     var state by remember { mutableStateOf(user.state) }
     var city by remember { mutableStateOf(user.city) }
+    var dob by remember { mutableStateOf(user.dob) }
 
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
     var isUploading by remember { mutableStateOf(false) }
@@ -401,6 +402,7 @@ fun EditProfileView(user: User, onSave: (User) -> Unit, onBack: () -> Unit) {
                     country = country,
                     state = state,
                     city = city,
+                    dob = dob,
                     updated_at = System.currentTimeMillis()
                 ))
             } catch (e: Exception) {
@@ -466,37 +468,6 @@ fun EditProfileView(user: User, onSave: (User) -> Unit, onBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Photos Section
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(text = "Photos", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    repeat(3) {
-                        Image(
-                            painter = painterResource(id = R.drawable.girl),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(0.8f)
-                                .clip(RoundedCornerShape(12.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .aspectRatio(0.8f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFF5F5F5)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Photo", tint = Color(0xFFFF1493), modifier = Modifier.size(32.dp))
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
             // Name Field
             EditProfileField(label = "First Name", value = firstName, onValueChange = { firstName = it }, placeholder = "Enter your first name")
 
@@ -523,80 +494,71 @@ fun EditProfileView(user: User, onSave: (User) -> Unit, onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
 
             // Looking For Field
-            val goalOptions = listOf("Serious Relationship", "Casual Dating", "Friendship", "Marriage")
             EditProfileField(
                 label = "Looking for",
                 value = lookingFor,
                 onValueChange = { lookingFor = it },
-                placeholder = "Select your goal",
-                isSelection = true,
-                options = goalOptions
+                placeholder = "Select your goal"
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Language Field
-            val languageOptions = listOf("English", "Spanish", "Hindi", "French", "German", "Chinese", "Tamil")
             EditProfileField(
                 label = "Language",
                 value = language,
                 onValueChange = { language = it },
-                placeholder = "Select Language",
-                isSelection = true,
-                options = languageOptions
+                placeholder = "Select Language"
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Country Field
-            val countryOptions = listOf("USA", "UK", "India", "Canada", "Australia", "Germany", "France")
             EditProfileField(
                 label = "Country",
                 value = country,
                 onValueChange = { country = it },
-                placeholder = "Select Country",
-                isSelection = true,
-                options = countryOptions
+                placeholder = "Select Country"
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // State Field
-            val stateOptions = listOf("California", "New York", "Texas", "Maharashtra", "Tamilnadu", "Delhi", "Ontario")
             EditProfileField(
                 label = "State",
                 value = state,
                 onValueChange = { state = it },
-                placeholder = "Select State",
-                isSelection = true,
-                options = stateOptions
+                placeholder = "Select State"
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // City Field
-            val cityOptions = listOf("New York", "London", "Mumbai", "Paris", "Tokyo", "Chennai", "Los Angeles")
             EditProfileField(
                 label = "City",
                 value = city,
                 onValueChange = { city = it },
-                placeholder = "Select City",
-                isSelection = true,
-                options = cityOptions
+                placeholder = "Select City"
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Date of Birth Field
+            EditProfileField(
+                label = "Date of Birth",
+                value = dob,
+                onValueChange = { dob = it },
+                placeholder = "DD/MM/YYYY"
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Interests Field
-            val interestOptions = listOf("Travel", "Music", "Movies", "Sports", "Food", "Reading", "Fitness", "Art")
             EditProfileField(
                 label = "Interests",
                 value = interests,
                 onValueChange = { interests = it },
-                placeholder = "Select Interests",
-                isSelection = true,
-                isMultiSelect = true,
-                options = interestOptions
+                placeholder = "Select Interests"
             )
 
             Spacer(modifier = Modifier.height(40.dp))
@@ -694,32 +656,38 @@ fun EditProfileField(
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(text = label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         Spacer(modifier = Modifier.height(8.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp))
-                .clickable(enabled = isSelection) { showDialog = true }
-                .padding(16.dp)
-        ) {
-            if (isSelection) {
+        if (isSelection) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp))
+                    .clickable { showDialog = true }
+                    .padding(16.dp)
+            ) {
                 Text(
                     text = if (value.isNotEmpty()) value else placeholder,
                     color = if (value.isNotEmpty()) Color.Black else Color.Gray,
                     modifier = Modifier.fillMaxWidth()
                 )
-            } else {
-                BasicTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (minHeight > 0.dp) Modifier.heightIn(min = minHeight) else Modifier),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Black)
-                )
-                if (value.isEmpty()) {
-                    Text(placeholder, color = Color.Gray)
-                }
             }
+        } else {
+            TextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (minHeight > 0.dp) Modifier.heightIn(min = minHeight) else Modifier),
+                placeholder = { Text(placeholder, color = Color.Gray) },
+                shape = RoundedCornerShape(12.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF5F5F5),
+                    unfocusedContainerColor = Color(0xFFF5F5F5),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = Color(0xFFFF1493)
+                ),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Black)
+            )
         }
     }
 }

@@ -108,13 +108,6 @@ class EditProfileActivity : AppCompatActivity() {
                 etDob.setText(date)
             }, year, month, day).show()
         }
-
-        etGender.setOnClickListener { showSelectionDialog("Select Gender", genderList) { etGender.setText(it) } }
-        etCountry.setOnClickListener { showSelectionDialog("Select Country", countryList) { etCountry.setText(it) } }
-        etState.setOnClickListener { showSelectionDialog("Select State", stateList) { etState.setText(it) } }
-        etCity.setOnClickListener { showSelectionDialog("Select City", cityList) { etCity.setText(it) } }
-        etLanguage.setOnClickListener { showSelectionDialog("Select Language", languageList) { etLanguage.setText(it) } }
-        etInterests.setOnClickListener { showInterestsDialog() }
     }
 
     private fun showInterestsDialog() {
@@ -158,30 +151,18 @@ class EditProfileActivity : AppCompatActivity() {
         etPhone = findViewById(R.id.et_phone)
         etBio = findViewById(R.id.et_bio)
         etGender = findViewById(R.id.et_gender)
-        etGender.isFocusable = false
-        etGender.isClickable = true
         
         etDob = findViewById(R.id.et_dob)
         
         etCountry = findViewById(R.id.et_country)
-        etCountry.isFocusable = false
-        etCountry.isClickable = true
         
         etState = findViewById(R.id.et_state)
-        etState.isFocusable = false
-        etState.isClickable = true
         
         etCity = findViewById(R.id.et_city)
-        etCity.isFocusable = false
-        etCity.isClickable = true
         
         etLanguage = findViewById(R.id.et_language)
-        etLanguage.isFocusable = false
-        etLanguage.isClickable = true
 
         etInterests = findViewById(R.id.et_interests)
-        etInterests.isFocusable = false
-        etInterests.isClickable = true
 
         etTimezone = findViewById(R.id.et_timezone)
         ivProfile = findViewById(R.id.edit_profile_image)

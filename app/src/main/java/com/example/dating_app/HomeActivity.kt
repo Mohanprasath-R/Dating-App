@@ -66,6 +66,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.LinearEasing
@@ -882,7 +885,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                         )
                         else -> {
                             when (selectedTab) {
-                                HomeTab.Discovery -> DiscoveryScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
+                                HomeTab.Discovery -> DiscoveryScreen(
+                                    onChatClick = onChatClick,
+                                    refreshTrigger = refreshTrigger,
+                                    onRefresh = { refreshTrigger++ }
+                                )
                                 HomeTab.Matches -> MatchesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                                 HomeTab.Likes -> LikesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                                 HomeTab.Message -> ModernChatListScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
@@ -2478,7 +2485,11 @@ fun MatchOverlay(matchedUser: User, onSendMessage: () -> Unit, onKeepSwiping: ()
     }
 }
 @Composable
-fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) {
+fun DiscoveryScreen(
+    onChatClick: (String, String) -> Unit,
+    refreshTrigger: Int = 0,
+    onRefresh: () -> Unit
+) {
     val repository = remember { FirebaseRepository() }
     val currentUser = remember { FirebaseAuth.getInstance().currentUser }
     val scope = rememberCoroutineScope()
@@ -2486,6 +2497,62 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
     var currentIndex by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
     var matchedUser by remember { mutableStateOf<User?>(null) }
+    
+    val offsetX = remember { Animatable(0f) }
+    val offsetY = remember { Animatable(0f) }
+
+    val onNext = {
+        if (profiles.isNotEmpty()) {
+            currentIndex = (currentIndex + 1) % profiles.size
+        }
+        scope.launch {
+            offsetX.snapTo(0f)
+            offsetY.snapTo(0f)
+        }
+    }
+
+    val onPrevious = {
+        if (profiles.isNotEmpty()) {
+            currentIndex = (currentIndex - 1 + profiles.size) % profiles.size
+        }
+        scope.launch {
+            offsetX.snapTo(0f)
+            offsetY.snapTo(0f)
+        }
+    }
+
+    val onLike = {
+        scope.launch {
+            if (currentUser != null && currentIndex < profiles.size) {
+                val profile = profiles[currentIndex]
+                repository.likeProfile(currentUser.uid, profile.id)
+                val theyLikedMeSnapshot = repository.getLikedByUsers(currentUser.uid).getOrDefault(emptyList())
+                if (theyLikedMeSnapshot.any { it.id == profile.id }) {
+                    matchedUser = profile
+                } else {
+                    if (profiles.isNotEmpty()) {
+                        currentIndex = (currentIndex + 1) % profiles.size
+                    }
+                }
+                offsetX.snapTo(0f)
+                offsetY.snapTo(0f)
+            }
+        }
+    }
+
+    val onDislike = {
+        scope.launch {
+            if (currentUser != null && currentIndex < profiles.size) {
+                val profile = profiles[currentIndex]
+                repository.dislikeProfile(currentUser.uid, profile.id)
+                if (profiles.isNotEmpty()) {
+                    currentIndex = (currentIndex + 1) % profiles.size
+                }
+                offsetX.snapTo(0f)
+                offsetY.snapTo(0f)
+            }
+        }
+    }
     
     LaunchedEffect(refreshTrigger) {
         if (currentUser != null) {
@@ -2505,160 +2572,89 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF9FAFB))) {
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFFF1493)) }
-        } else if (currentIndex < profiles.size) {
-            val profile = profiles[currentIndex]
-            
+        } else if (profiles.isNotEmpty()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(1f).padding(16.dp)) {
-                    Card(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = RoundedCornerShape(32.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                    ) {
-                        Box {
-                            AsyncImage(
-                                model = if (profile.profile_image.isNotEmpty()) profile.profile_image else R.drawable.girl,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                            
-                            // Top Overlay
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    color = Color.Black.copy(alpha = 0.4f),
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 12.dp)
-                                    ) {
-                                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF4CAF50)))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Online", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                
-                                IconButton(
-                                    onClick = { },
-                                    modifier = Modifier.size(32.dp).background(Color.Black.copy(alpha = 0.2f), CircleShape)
-                                ) {
-                                    Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White)
-                                }
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
-                                            startY = 500f
-                                        )
-                                    )
-                            )
-                            
-                            Column(
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(24.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = "${profile.first_name}, ${getAge(profile.dob)}",
-                                        color = Color.White,
-                                        fontSize = 32.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Icon(
-                                        Icons.Default.CheckCircle,
-                                        contentDescription = "Verified",
-                                        tint = Color(0xFFFF1493),
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                                
-                                Text(
-                                    text = profile.bio.take(100) + if(profile.bio.length > 100) "..." else "",
-                                    color = Color.White.copy(alpha = 0.9f),
-                                    fontSize = 15.sp,
-                                    lineHeight = 20.sp,
-                                    modifier = Modifier.padding(vertical = 8.dp)
-                                )
-                                
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Bottom
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Surface(
-                                            color = Color.White.copy(alpha = 0.2f),
-                                            shape = RoundedCornerShape(20.dp),
-                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                                            ) {
-                                                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = "${profile.city} • 2km away",
-                                                    color = Color.White,
-                                                    fontSize = 13.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-                                        
-                                        var isMutualLike by remember(profile.id) { mutableStateOf(false) }
-                                        LaunchedEffect(profile.id) {
-                                            if (currentUser != null) {
-                                                val theyLikedMeSnapshot = repository.getLikedByUsers(currentUser.uid).getOrDefault(emptyList())
-                                                isMutualLike = theyLikedMeSnapshot.any { it.id == profile.id }
-                                            }
-                                        }
-
-                                        if (isMutualLike) {
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            IconButton(
-                                                onClick = { onChatClick(profile.first_name, profile.id) },
-                                                modifier = Modifier
-                                                    .size(48.dp)
-                                                    .background(Color(0xFFFF1493), CircleShape)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.ChatBubble,
-                                                    contentDescription = "Message",
-                                                    tint = Color.White
-                                                )
-                                            }
-                                        }
-                                    }
-                                    
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        InterestChip("Travel ✈️")
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        InterestChip("Music 🎵")
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        InterestChip("Photography 📷")
-                                    }
-                                }
-                            }
-                        }
+                    val swipeProgress = (kotlin.math.abs(offsetX.value) / 500f).coerceIn(0f, 1f)
+                    
+                    // Card 2 (Bottom)
+                    if (profiles.size > 2) {
+                        val bottomIndex = (currentIndex + 2) % profiles.size
+                        DiscoveryCard(
+                            profile = profiles[bottomIndex],
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    val scale = 0.90f + (0.05f * swipeProgress)
+                                    scaleX = scale
+                                    scaleY = scale
+                                    translationY = (30.dp.toPx()) * (1f - swipeProgress * 0.5f)
+                                    alpha = 0.3f + (0.2f * swipeProgress)
+                                },
+                            getAge = { getAge(it) }
+                        )
                     }
+
+                    // Card 1 (Middle)
+                    if (profiles.size > 1) {
+                        val middleIndex = (currentIndex + 1) % profiles.size
+                        DiscoveryCard(
+                            profile = profiles[middleIndex],
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    val scale = 0.95f + (0.05f * swipeProgress)
+                                    scaleX = scale
+                                    scaleY = scale
+                                    translationY = (15.dp.toPx()) * (1f - swipeProgress)
+                                    alpha = 0.5f + (0.5f * swipeProgress)
+                                },
+                            getAge = { getAge(it) }
+                        )
+                    }
+
+                    // Card 0 (Top)
+                    val profile = profiles[currentIndex]
+                    DiscoveryCard(
+                        profile = profile,
+                        modifier = Modifier
+                            .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
+                            .graphicsLayer {
+                                rotationZ = offsetX.value / 20
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                            }
+                            .pointerInput(profile.id) {
+                                detectDragGestures(
+                                    onDragEnd = {
+                                        scope.launch {
+                                            if (offsetX.value > 300) {
+                                                offsetX.animateTo(1000f, spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy))
+                                                onPrevious()
+                                            } else if (offsetX.value < -300) {
+                                                offsetX.animateTo(-1000f, spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy))
+                                                onNext()
+                                            } else {
+                                                launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy)) }
+                                                launch { offsetY.animateTo(0f, spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy)) }
+                                            }
+                                        }
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        scope.launch {
+                                            offsetX.snapTo(offsetX.value + dragAmount.x)
+                                            offsetY.snapTo(offsetY.value + dragAmount.y)
+                                        }
+                                    }
+                                )
+                            },
+                        isTopCard = true,
+                        offsetX = offsetX.value,
+                        onChatClick = onChatClick,
+                        getAge = { getAge(it) }
+                    )
                 }
 
                 // Precise Swipe Actions matching requested UI
+                val profile = profiles[currentIndex]
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2667,27 +2663,18 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Rewind - Yellow
-                    ActionCircleButton(Icons.Default.Refresh, Color(0xFFFFB300), 50.dp) { /* Rewind */ }
+                    ActionCircleButton(Icons.Default.Refresh, Color(0xFFFFB300), 50.dp) { 
+                        onPrevious()
+                    }
                     
                     // Dislike - Red
                     ActionCircleButton(Icons.Default.Close, Color(0xFFF44336), 62.dp) { 
-                        scope.launch { currentUser?.let { repository.dislikeProfile(it.uid, profile.id) } }
-                        currentIndex++ 
+                        onDislike()
                     }
                     
                     // Like - Pink Background, White Icon (Largest)
                     ActionCircleButton(Icons.Default.Favorite, Color.White, 82.dp, containerColor = Color(0xFFFF2D6C)) { 
-                        scope.launch { 
-                            if (currentUser != null) {
-                                repository.likeProfile(currentUser.uid, profile.id)
-                                val theyLikedMeSnapshot = repository.getLikedByUsers(currentUser.uid).getOrDefault(emptyList())
-                                if (theyLikedMeSnapshot.any { it.id == profile.id }) {
-                                    matchedUser = profile
-                                } else {
-                                    currentIndex++
-                                }
-                            }
-                        }
+                        onLike()
                     }
                     
                     // Super Like - Cyan
@@ -2700,8 +2687,24 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = Color(0xFFFF1493).copy(alpha = 0.3f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text("No more profiles", color = Color.Gray, fontSize = 18.sp)
-                    TextButton(onClick = { refreshTrigger }) { Text("Refresh", color = Color(0xFFFF2D6C)) }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = onRefresh,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1493)),
+                        shape = RoundedCornerShape(24.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Refresh")
+                    }
                 }
             }
         }
@@ -2712,14 +2715,224 @@ fun DiscoveryScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int =
                 onSendMessage = {
                     val user = matchedUser!!
                     matchedUser = null
-                    currentIndex++
+                    if (profiles.isNotEmpty()) {
+                        currentIndex = (currentIndex + 1) % profiles.size
+                    }
+                    scope.launch {
+                        offsetX.snapTo(0f)
+                        offsetY.snapTo(0f)
+                    }
                     onChatClick(user.first_name, user.id)
                 },
                 onKeepSwiping = {
                     matchedUser = null
-                    currentIndex++
+                    if (profiles.isNotEmpty()) {
+                        currentIndex = (currentIndex + 1) % profiles.size
+                    }
+                    scope.launch {
+                        offsetX.snapTo(0f)
+                        offsetY.snapTo(0f)
+                    }
                 }
             )
+        }
+    }
+}
+
+@Composable
+fun DiscoveryCard(
+    profile: User,
+    modifier: Modifier = Modifier,
+    isTopCard: Boolean = false,
+    offsetX: Float = 0f,
+    onChatClick: (String, String) -> Unit = { _, _ -> },
+    getAge: (String) -> String
+) {
+    val repository = remember { FirebaseRepository() }
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val dragProgress = (kotlin.math.abs(offsetX) / 100f).coerceIn(0f, 1f)
+
+    Card(
+        modifier = modifier.fillMaxSize(),
+        shape = RoundedCornerShape(32.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isTopCard) (8.dp + (4.dp * dragProgress)) else 2.dp)
+    ) {
+        Box {
+            AsyncImage(
+                model = if (profile.profile_image.isNotEmpty()) profile.profile_image else R.drawable.girl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+
+            // Tinder-style Overlays
+            if (isTopCard) {
+                // NEXT (Left Swipe) Indicator
+                if (offsetX < -100) {
+                    Box(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .align(Alignment.TopEnd)
+                            .graphicsLayer { 
+                                alpha = ((-offsetX - 100) / 200f).coerceIn(0f, 1f)
+                                rotationZ = 15f
+                            }
+                            .border(4.dp, Color.Red, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Text("NEXT", color = Color.Red, fontSize = 32.sp, fontWeight = FontWeight.Black)
+                    }
+                }
+                
+                // PREV (Right Swipe) Indicator
+                if (offsetX > 100) {
+                    Box(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .align(Alignment.TopStart)
+                            .graphicsLayer { 
+                                alpha = ((offsetX - 100) / 200f).coerceIn(0f, 1f)
+                                rotationZ = -15f
+                            }
+                            .border(4.dp, Color(0xFFFFB300), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Text("PREV", color = Color(0xFFFFB300), fontSize = 32.sp, fontWeight = FontWeight.Black)
+                    }
+                }
+            }
+            
+            // Top Overlay
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    ) {
+                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF4CAF50)))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Online", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                
+                IconButton(
+                    onClick = { },
+                    modifier = Modifier.size(32.dp).background(Color.Black.copy(alpha = 0.2f), CircleShape)
+                ) {
+                    Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.White)
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                            startY = 500f
+                        )
+                    )
+            )
+            
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(24.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${profile.first_name}, ${getAge(profile.dob)}",
+                        color = Color.White,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Verified",
+                        tint = Color(0xFFFF1493),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                
+                Text(
+                    text = profile.bio.take(100) + if(profile.bio.length > 100) "..." else "",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 15.sp,
+                    lineHeight = 20.sp,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Surface(
+                            color = Color.White.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(20.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "${profile.city} • 2km away",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        
+                        var isMutualLike by remember(profile.id) { mutableStateOf(false) }
+                        LaunchedEffect(profile.id) {
+                            if (currentUser != null) {
+                                val theyLikedMeSnapshot = repository.getLikedByUsers(currentUser.uid).getOrDefault(emptyList())
+                                isMutualLike = theyLikedMeSnapshot.any { it.id == profile.id }
+                            }
+                        }
+
+                        if (isMutualLike) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            IconButton(
+                                onClick = { onChatClick(profile.first_name, profile.id) },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(Color(0xFFFF1493), CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ChatBubble,
+                                    contentDescription = "Message",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    }
+                    
+                    Column(horizontalAlignment = Alignment.End) {
+                        InterestChip("Travel ✈️")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        InterestChip("Music 🎵")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        InterestChip("Photography 📷")
+                    }
+                }
+            }
         }
     }
 }

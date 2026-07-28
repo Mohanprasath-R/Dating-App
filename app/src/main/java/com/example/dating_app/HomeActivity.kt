@@ -1793,6 +1793,13 @@ fun LikesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) 
                             currentUser?.let { repository.likeProfile(it.uid, user.id) }
                             onChatClick(user.first_name, user.id)
                         }
+                    },
+                    onReject = {
+                        scope.launch {
+                            currentUser?.let { repository.dislikeProfile(it.uid, user.id) }
+                            // Force refresh by clearing the user from the list locally
+                            likedByUsers = likedByUsers.filter { it.id != user.id }
+                        }
                     }
                 )
             }
@@ -1818,7 +1825,7 @@ fun EmptyLikesState() {
     }
 }
 @Composable
-fun LikedUserCard(user: User, onChatClick: () -> Unit, onLikeBack: () -> Unit) {
+fun LikedUserCard(user: User, onChatClick: () -> Unit, onLikeBack: () -> Unit, onReject: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1844,25 +1851,6 @@ fun LikedUserCard(user: User, onChatClick: () -> Unit, onLikeBack: () -> Unit) {
                         )
                     )
             )
-            
-            // "Chat" Badge (Clickable)
-            Surface(
-                modifier = Modifier
-                    .padding(8.dp)
-                    .align(Alignment.TopEnd)
-                    .clickable { onChatClick() },
-                shape = RoundedCornerShape(12.dp),
-                color = Color.White.copy(alpha = 0.9f)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = "Chat", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFFF2D6C)))
-                }
-            }
             
             // User Details
             Column(
@@ -1899,24 +1887,49 @@ fun LikedUserCard(user: User, onChatClick: () -> Unit, onLikeBack: () -> Unit) {
                 }
             }
             
-            // Heart Button
-            Surface(
+            // Action Buttons
+            Row(
                 modifier = Modifier
-                    .padding(12.dp)
-                    .size(40.dp)
                     .align(Alignment.BottomEnd)
-                    .clickable { onLikeBack() },
-                shape = CircleShape,
-                color = Color.White,
-                shadowElevation = 4.dp
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.Favorite,
-                        contentDescription = "Like Back",
-                        tint = Color(0xFFFF2D6C),
-                        modifier = Modifier.size(20.dp)
-                    )
+                // Reject Button (X)
+                Surface(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clickable { onReject() },
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 4.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Reject",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // Heart Button (Like Back)
+                Surface(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clickable { onLikeBack() },
+                    shape = CircleShape,
+                    color = Color.White,
+                    shadowElevation = 4.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Favorite,
+                            contentDescription = "Like Back",
+                            tint = Color(0xFFFF2D6C),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

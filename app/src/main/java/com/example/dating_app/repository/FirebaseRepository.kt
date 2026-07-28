@@ -293,13 +293,27 @@ class FirebaseRepository {
                 .await()
             val blockedIds = blockedSnapshot.documents.mapNotNull { it.getString("blockedId") }.toSet()
 
+            // Fetch disliked users to filter
+            val dislikedSnapshot = firestore.collection("disliked_profiles")
+                .whereEqualTo("fromUserId", userId)
+                .get()
+                .await()
+            val dislikedIds = dislikedSnapshot.documents.mapNotNull { it.getString("toUserId") }.toSet()
+
+            // Fetch profiles I liked to filter out mutual matches
+            val myLikesSnapshot = firestore.collection("liked_profiles")
+                .whereEqualTo("fromUserId", userId)
+                .get()
+                .await()
+            val myLikedIds = myLikesSnapshot.documents.mapNotNull { it.getString("toUserId") }.toSet()
+
             val snapshot = firestore.collection("liked_profiles")
                 .whereEqualTo("toUserId", userId)
                 .get()
                 .await()
             
             val likerIds = snapshot.documents.mapNotNull { it.getString("fromUserId") }
-                .filter { it !in blockedIds }
+                .filter { it !in blockedIds && it !in dislikedIds && it !in myLikedIds }
             
             if (likerIds.isEmpty()) return Result.success(emptyList())
 

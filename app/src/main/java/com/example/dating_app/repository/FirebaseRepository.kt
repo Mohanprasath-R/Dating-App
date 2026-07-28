@@ -411,7 +411,7 @@ class FirebaseRepository {
 
     suspend fun deleteMessage(messageId: String): Result<Unit> {
         return try {
-            messagesCollection.document(messageId).update("deletedForEveryone", true).await()
+            messagesCollection.document(messageId).delete().await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -551,7 +551,9 @@ class FirebaseRepository {
                 partnerResult.onSuccess { partner ->
                     if (partner != null) {
                         val partnerMessages = allMessages.filter { 
-                            it.senderId == partnerId || it.receiverId == partnerId 
+                            (it.senderId == partnerId || it.receiverId == partnerId) &&
+                            !it.deletedForMe.contains(currentUserId) &&
+                            !it.deletedForEveryone
                         }
                         val lastMessage = partnerMessages.firstOrNull()
                         val unreadCount = partnerMessages.count { it.receiverId == currentUserId && !it.isRead }
@@ -609,11 +611,15 @@ class FirebaseRepository {
                         val currentUserData = getUser(currentUserId).getOrNull()
 
                         if (partner != null) {
-                            val sortedMessages = partnerMessages.sortedByDescending { it.timestamp }
+                            val validMessages = partnerMessages.filter { 
+                                !it.deletedForMe.contains(currentUserId) && !it.deletedForEveryone 
+                            }
+                            val sortedMessages = validMessages.sortedByDescending { it.timestamp }
                             val lastMessage = sortedMessages.firstOrNull()
+                            
                             // Calculate unread count specifically for messages received BY the current user
-                            val unreadCount = partnerMessages.count { 
-                                it.receiverId == currentUserId && !it.isRead && !it.deletedForEveryone 
+                            val unreadCount = validMessages.count { 
+                                it.receiverId == currentUserId && !it.isRead
                             }
                             
                             val isPinned = currentUserData?.pinned_chats?.contains(partnerId) == true

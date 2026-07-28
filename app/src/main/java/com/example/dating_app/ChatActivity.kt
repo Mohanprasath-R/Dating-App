@@ -685,8 +685,11 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                 message = selectedMessageForMenu!!,
                 isMe = selectedMessageForMenu!!.senderId == currentUser?.uid,
                 onReaction = { emoji ->
+                    val messageId = selectedMessageForMenu?.id
                     scope.launch {
-                        currentUser?.let { repository.addReaction(selectedMessageForMenu!!.id, it.uid, emoji) }
+                        if (messageId != null && currentUser != null) {
+                            repository.addReaction(messageId, currentUser.uid, emoji)
+                        }
                     }
                 },
                 onReply = { replyingToMessage = selectedMessageForMenu },
@@ -708,10 +711,17 @@ fun ChatScreen(chatName: String, receiverId: String, onBack: () -> Unit) {
                     Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
                 },
                 onUnsend = {
-                    scope.launch { repository.deleteMessage(selectedMessageForMenu!!.id) }
+                    val messageId = selectedMessageForMenu?.id
+                    if (messageId != null) {
+                        scope.launch { repository.deleteMessage(messageId) }
+                    }
                 },
                 onDeleteForMe = {
-                    scope.launch { currentUser?.let { repository.deleteMessageForMe(selectedMessageForMenu!!.id, it.uid) } }
+                    val messageId = selectedMessageForMenu?.id
+                    val userId = currentUser?.uid
+                    if (messageId != null && userId != null) {
+                        scope.launch { repository.deleteMessageForMe(messageId, userId) }
+                    }
                 },
                 onDismiss = { selectedMessageForMenu = null }
             )

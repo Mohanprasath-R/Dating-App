@@ -12,6 +12,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -82,6 +84,7 @@ import com.example.dating_app.model.Message
 import com.example.dating_app.model.MessageType
 import com.example.dating_app.model.Call
 import com.example.dating_app.repository.FirebaseRepository
+import com.example.dating_app.util.DateUtils
 import com.example.dating_app.util.SecurityUtils
 import com.example.dating_app.UserProfileScreen
 import com.google.firebase.auth.FirebaseAuth
@@ -227,6 +230,8 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
     var unreadMessageCount by remember { mutableIntStateOf(0) }
     var unreadLikesCount by remember { mutableIntStateOf(0) }
     var lastReceivedMessage by remember { mutableStateOf<Message?>(null) }
+    var lastReceivedLike by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var bannerType by remember { mutableStateOf("message") } // "message" or "like"
     var showNotificationBanner by remember { mutableStateOf(false) }
 
     // Fetch Current User Data & Observe Unread Counts
@@ -259,6 +264,24 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                 // Only show banner for messages received while the app is open (recent timestamp)
                 if (message != null && message.timestamp > System.currentTimeMillis() - 5000) {
                     lastReceivedMessage = message
+                    bannerType = "message"
+                    showNotificationBanner = true
+                    refreshTrigger++ // Force list refresh
+                    delay(3000)
+                    showNotificationBanner = false
+                }
+            }
+        }
+    }
+
+    // Observe Incoming Likes for Notification Banner
+    LaunchedEffect(Unit) {
+        auth.currentUser?.uid?.let { uid ->
+            repository.observeLastLike(uid).collectLatest { like ->
+                val timestamp = like?.get("timestamp") as? Long ?: 0L
+                if (like != null && timestamp > System.currentTimeMillis() - 5000) {
+                    lastReceivedLike = like
+                    bannerType = "like"
                     showNotificationBanner = true
                     refreshTrigger++ // Force list refresh
                     delay(3000)
@@ -302,6 +325,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
         currentSubScreen == "terms" -> "Terms of Service"
         currentSubScreen == "privacy" -> "Privacy Policy"
         currentSubScreen == "safety_guidelines" -> "Safety Guidelines"
+        currentSubScreen == "notifications" -> "Notifications"
         profileSubScreen == "details" -> "Profile Details"
         profileSubScreen == "edit" -> "Edit Profile"
         else -> when (selectedTab) {
@@ -624,8 +648,21 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                 IconButton(onClick = { currentSubScreen = "filters" }) {
                                     Icon(Icons.Default.Tune, contentDescription = "Filters", tint = Color.Gray)
                                 }
-                                IconButton(onClick = { }) { 
-                                    Icon(Icons.Default.NotificationsNone, contentDescription = "Notifications", tint = Color.Gray)
+                                IconButton(onClick = { currentSubScreen = "notifications" }) {
+                                    BadgedBox(
+                                        badge = {
+                                            if (unreadMessageCount + unreadLikesCount > 0) {
+                                                Badge { Text((unreadMessageCount + unreadLikesCount).toString()) }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (unreadMessageCount + unreadLikesCount > 0) 
+                                                Icons.Default.NotificationsActive else Icons.Default.NotificationsNone, 
+                                            contentDescription = "Notifications", 
+                                            tint = if (unreadMessageCount + unreadLikesCount > 0) Color(0xFFFF1493) else Color.Gray
+                                        )
+                                    }
                                 }
                                 // Added Profile Icon on the right side
                                 IconButton(
@@ -831,6 +868,18 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                             requestedSubScreen = profileSubScreen,
                             onBack = { currentSubScreen = null }
                         )
+                        currentSubScreen == "notifications" -> NotificationsScreen(
+                            currentUserProfile = currentUserProfile,
+                            unreadMessageCount = unreadMessageCount,
+                            unreadLikesCount = unreadLikesCount,
+                            onActionClick = { action ->
+                                when (action) {
+                                    "premium" -> context.startActivity(Intent(context, PremiumActivity::class.java))
+                                    "messages" -> { selectedTab = HomeTab.Message; currentSubScreen = null }
+                                    "likes" -> { selectedTab = HomeTab.Likes; currentSubScreen = null }
+                                }
+                            }
+                        )
                         else -> {
                             when (selectedTab) {
                                 HomeTab.Discovery -> DiscoveryScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
@@ -868,7 +917,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                selectedTab = HomeTab.Message
+                                if (bannerType == "message") {
+                                    selectedTab = HomeTab.Message
+                                } else {
+                                    selectedTab = HomeTab.Likes
+                                }
                                 showNotificationBanner = false
                             },
                         shape = RoundedCornerShape(16.dp),
@@ -886,7 +939,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        Icons.AutoMirrored.Filled.Chat,
+                                        imageVector = if (bannerType == "message") Icons.AutoMirrored.Filled.Chat else Icons.Default.Favorite,
                                         contentDescription = null,
                                         tint = Color(0xFFFF1493),
                                         modifier = Modifier.size(24.dp)
@@ -895,15 +948,23 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
-                                Text("New Message", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                val bannerText = remember(lastReceivedMessage) {
-                                    val msg = lastReceivedMessage
-                                    if (msg == null) ""
-                                    else if (msg.messageType != MessageType.TEXT) msg.messageType
-                                    else if (msg.encrypted) {
-                                        val key = SecurityUtils.generateChatKey(auth.currentUser?.uid ?: "", msg.senderId)
-                                        SecurityUtils.decrypt(msg.messageText, key)
-                                    } else msg.messageText
+                                Text(
+                                    text = if (bannerType == "message") "New Message" else "New Like!",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                val bannerText = remember(lastReceivedMessage, lastReceivedLike, bannerType) {
+                                    if (bannerType == "message") {
+                                        val msg = lastReceivedMessage
+                                        if (msg == null) ""
+                                        else if (msg.messageType != MessageType.TEXT) msg.messageType
+                                        else if (msg.encrypted) {
+                                            val key = SecurityUtils.generateChatKey(auth.currentUser?.uid ?: "", msg.senderId)
+                                            SecurityUtils.decrypt(msg.messageText, key)
+                                        } else msg.messageText
+                                    } else {
+                                        "Someone liked your profile! Check it out."
+                                    }
                                 }
                                 Text(
                                     bannerText,
@@ -1030,7 +1091,7 @@ fun AstrologyChatView(
                         // Try strict filtering first (City + Age + Gender)
                         var filtered = potentialMatches.filter { 
                             val cityMatch = preferredCity.isEmpty() || it.city.contains(preferredCity, ignoreCase = true) || preferredCity.contains(it.city, ignoreCase = true)
-                            val age = getAgeFromDob(it.dob)
+                            val age = DateUtils.getAgeFromDob(it.dob)
                             val ageMatch = when (preferredAgeRange) {
                                 "18-24" -> age in 18..24
                                 "25-30" -> age in 25..30
@@ -1274,7 +1335,7 @@ fun AstrologyChatView(
                                                 Spacer(modifier = Modifier.width(12.dp))
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        text = "${match.first_name}, ${getAgeFromDob(match.dob)}",
+                                                        text = "${match.first_name}, ${DateUtils.getAgeFromDob(match.dob)}",
                                                         fontWeight = FontWeight.Bold,
                                                         fontSize = 18.sp
                                                     )
@@ -1361,11 +1422,6 @@ fun AstrologyChatView(
     }
 }
 
-fun getAgeFromDob(dob: String): Int {
-    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-    val birthYear = dob.split("/").lastOrNull()?.toIntOrNull() ?: 2000
-    return currentYear - birthYear
-}
 
 fun getAstrologyResponse(userInput: String, user: User?, matches: List<User>): String {
     val input = userInput.lowercase()
@@ -2089,12 +2145,121 @@ fun FloatingHeart(data: HeartData, screenHeight: androidx.compose.ui.unit.Dp) {
     )
 }
 @Composable
-fun NotificationsScreen() {
-    Column(modifier = Modifier.fillMaxSize().background(Color.White).padding(16.dp)) {
-        Text("Notifications", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(24.dp))
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No new notifications", color = Color.Gray)
+fun NotificationsScreen(
+    currentUserProfile: User?,
+    unreadMessageCount: Int,
+    unreadLikesCount: Int,
+    onActionClick: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFFDF7F9))
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        // Premium Notification
+        if (currentUserProfile?.is_premium != true) {
+            NotificationCard(
+                title = "Upgrade to Premium! 💎",
+                description = "See who liked you and get unlimited swipes with our Premium plan.",
+                icon = Icons.Default.Diamond,
+                iconColor = Color(0xFFFFD700),
+                backgroundColor = Color(0xFFFFF8E1),
+                onClick = { onActionClick("premium") }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Likes Notification
+        if (unreadLikesCount > 0) {
+            NotificationCard(
+                title = "New Likes! ❤️",
+                description = "You have $unreadLikesCount new people interested in you. Check them out!",
+                icon = Icons.Default.Favorite,
+                iconColor = Color(0xFFFF2D6C),
+                backgroundColor = Color(0xFFFFEBEE),
+                onClick = { onActionClick("likes") }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Messages Notification
+        if (unreadMessageCount > 0) {
+            NotificationCard(
+                title = "New Messages 💬",
+                description = "You have $unreadMessageCount unread messages waiting for you.",
+                icon = Icons.Default.Chat,
+                iconColor = Color(0xFF2196F3),
+                backgroundColor = Color(0xFFE3F2FD),
+                onClick = { onActionClick("messages") }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // App Updates / Tips
+        NotificationCard(
+            title = "Profile Tip 💡",
+            description = "Users with at least 3 photos get 5x more matches! Add more photos to your profile.",
+            icon = Icons.Default.Lightbulb,
+            iconColor = Color(0xFF4CAF50),
+            backgroundColor = Color(0xFFE8F5E9),
+            onClick = { /* Could navigate to profile edit */ }
+        )
+        
+        if (unreadMessageCount == 0 && unreadLikesCount == 0 && currentUserProfile?.is_premium == true) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.NotificationsNone, 
+                        contentDescription = null, 
+                        modifier = Modifier.size(64.dp), 
+                        tint = Color.LightGray
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("You're all caught up!", color = Color.Gray, fontSize = 16.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NotificationCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    iconColor: Color,
+    backgroundColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(48.dp),
+                shape = CircleShape,
+                color = backgroundColor
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(24.dp))
+                }
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
+                Text(text = description, fontSize = 14.sp, color = Color.Gray)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.LightGray)
         }
     }
 }

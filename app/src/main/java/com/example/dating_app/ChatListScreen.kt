@@ -39,6 +39,7 @@ import com.example.dating_app.model.MessageType
 import com.example.dating_app.model.User
 import com.example.dating_app.repository.ChatListItem
 import com.example.dating_app.repository.FirebaseRepository
+import com.example.dating_app.util.DateUtils
 import com.example.dating_app.util.SecurityUtils
 import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
@@ -106,94 +107,159 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
             .fillMaxSize()
             .background(Color(0xFFFDF7F9))
     ) {
-        // Search Bar Row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
-                placeholder = { Text("Search messages or people...", color = Color.Gray, fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFFFF1493)) },
-                shape = RoundedCornerShape(16.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                singleLine = true
-            )
-
-        }
-
-        // Horizontal Stories/Matches Bar
-        if (onlineUsers.isNotEmpty()) {
-            LazyRow(
+        // Search Bar Row - Show only on Messages tab
+        if (selectedTab == 0) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                items(onlineUsers) { user ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(contentAlignment = Alignment.BottomEnd) {
-                            AsyncImage(
-                                model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(70.dp)
-                                    .clip(CircleShape)
-                                    .border(2.dp, Color(0xFFFF1493), CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF4CAF50))
-                                    .border(2.dp, Color.White, CircleShape)
-                            )
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
+                    placeholder = { Text("Search messages or people...", color = Color.Gray, fontSize = 14.sp) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFFFF1493)) },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    singleLine = true
+                )
+            }
+
+            // Horizontal Stories/Matches Bar - Show only on Messages tab
+            if (onlineUsers.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(onlineUsers) { user ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(contentAlignment = Alignment.BottomEnd) {
+                                AsyncImage(
+                                    model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(70.dp)
+                                        .clip(CircleShape)
+                                        .border(2.dp, Color(0xFFFF1493), CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF4CAF50))
+                                        .border(2.dp, Color.White, CircleShape)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(user.first_name, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(user.first_name, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+
+        // Tab Switcher (Pill Style)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .height(56.dp)
+                .background(Color(0xFFF9F9F9), RoundedCornerShape(28.dp))
+                .padding(4.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                // Messages Tab
+                Surface(
+                    onClick = { selectedTab = 0 },
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = if (selectedTab == 0) Color.White else Color.Transparent,
+                    shadowElevation = if (selectedTab == 0) 2.dp else 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Chat,
+                            contentDescription = null,
+                            tint = if (selectedTab == 0) Color.Gray else Color.LightGray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Messages",
+                            color = if (selectedTab == 0) Color.Gray else Color.LightGray,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp
+                        )
+                    }
+                }
+
+                // Requests Tab
+                Surface(
+                    onClick = { selectedTab = 1 },
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = if (selectedTab == 1) Color.White else Color.Transparent,
+                    shadowElevation = if (selectedTab == 1) 2.dp else 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = if (selectedTab == 1) Color(0xFFFF1493) else Color.LightGray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Requests",
+                            color = if (selectedTab == 1) Color(0xFFFF1493) else Color.LightGray,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp
+                        )
+                        if (requests.isNotEmpty()) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                modifier = Modifier.size(22.dp),
+                                shape = CircleShape,
+                                color = Color(0xFFFF1493)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = requests.size.toString(),
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // Tab Switcher
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            TabItem(
-                title = "Messages",
-                badgeCount = totalUnreadCount,
-                isSelected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                modifier = Modifier.weight(1f)
-            )
-            TabItem(
-                title = "Requests",
-                badgeCount = requests.size,
-                isSelected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Content Area
         Box(modifier = Modifier.weight(1f)) {
@@ -223,34 +289,88 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
                         }
                     }
                 } else {
-                    // Requests Tab
+                    // Requests Tab (Redesigned based on Image)
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
-                        items(visibleRequests) { user ->
-                            ModernRequestItem(
-                                user = user,
-                                onAccept = {
-                                    scope.launch {
-                                        currentUser?.let { me ->
-                                            repository.likeProfile(me.uid, user.id).onSuccess {
-                                                localRefreshTrigger++
-                                            }
-                                        }
-                                    }
-                                },
-                                onReject = {
-                                    scope.launch {
-                                        currentUser?.let { me ->
-                                            repository.blockUser(me.uid, user.id).onSuccess {
-                                                localRefreshTrigger++
-                                            }
-                                        }
-                                    }
+                        // New Request Header
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("New Request", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color.Black)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFFF1493)))
                                 }
-                            )
+                                Text("1 new", color = Color(0xFFFF1493), fontSize = 14.sp)
+                            }
+                        }
+
+                        // Request Card
+                        if (visibleRequests.isNotEmpty()) {
+                            item {
+                                ModernRequestItem(
+                                    user = visibleRequests.first(),
+                                    onAccept = {
+                                        scope.launch {
+                                            currentUser?.let { me ->
+                                                repository.likeProfile(me.uid, visibleRequests.first().id).onSuccess {
+                                                    localRefreshTrigger++
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onReject = {
+                                        scope.launch {
+                                            currentUser?.let { me ->
+                                                repository.blockUser(me.uid, visibleRequests.first().id).onSuccess {
+                                                    localRefreshTrigger++
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
+                        // Suggestions Header
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.AutoAwesome, null, tint = Color(0xFFFF1493), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Suggestions", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color.Black)
+                                }
+                                Text("See all", color = Color(0xFFFF1493), fontSize = 14.sp)
+                            }
+                        }
+
+                        // Suggestions Row
+                        item {
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                items(onlineUsers.take(5)) { user ->
+                                    SuggestionCard(user)
+                                }
+                            }
+                        }
+
+                        // Safety Banner
+                        item {
+                            Spacer(modifier = Modifier.height(32.dp))
+                            SafetyBanner()
                         }
                     }
                 }
@@ -442,21 +562,29 @@ fun ModernRequestItem(
     onReject: () -> Unit
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         shape = RoundedCornerShape(24.dp),
         color = Color.White,
-        shadowElevation = 1.dp
+        shadowElevation = 4.dp
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(contentAlignment = Alignment.BottomEnd) {
+            Box(contentAlignment = Alignment.Center) {
+                // Circle Around Profile Image
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .border(1.dp, Color(0xFFFF1493), CircleShape)
+                )
                 AsyncImage(
                     model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(64.dp)
+                        .size(70.dp)
                         .clip(CircleShape),
                     contentScale = ContentScale.Crop
                 )
@@ -465,51 +593,203 @@ fun ModernRequestItem(
             Spacer(modifier = Modifier.width(16.dp))
             
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "${user.first_name} ${user.last_name}",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.Black
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = user.first_name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.Black
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        color = Color(0xFFFFEEF5),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "New",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            color = Color(0xFFFF1493),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
                 Text(
                     text = "Interested in you!",
-                    fontSize = 13.sp,
-                    color = Color.Gray
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Icon(Icons.Default.Schedule, null, tint = Color(0xFFFF1493).copy(0.5f), modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("2 min ago", fontSize = 12.sp, color = Color.Gray)
+                }
             }
             
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
                     onClick = onReject,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(44.dp)
                         .background(Color(0xFFF5F5F5), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Reject",
                         tint = Color.Gray,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 IconButton(
                     onClick = onAccept,
                     modifier = Modifier
-                        .size(40.dp)
-                        .background(Color(0xFFFF1493), CircleShape)
+                        .size(56.dp)
+                        .background(
+                            Brush.linearGradient(listOf(Color(0xFFFF2D6C), Color(0xFFC71585))), 
+                            CircleShape
+                        )
                 ) {
                     Icon(
                         imageVector = Icons.Default.Favorite,
                         contentDescription = "Accept",
                         tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }
         }
     }
 }
+
+@Composable
+fun SuggestionCard(user: User) {
+    Surface(
+        modifier = Modifier
+            .width(160.dp)
+            .padding(vertical = 8.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White,
+        shadowElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(contentAlignment = Alignment.BottomEnd) {
+                AsyncImage(
+                    model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF4CAF50))
+                        .border(2.dp, Color.White, CircleShape)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Text(user.first_name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("${DateUtils.getAgeFromDob(user.dob)}  •  ${user.city}", color = Color.Gray, fontSize = 12.sp)
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Surface(
+                color = Color(0xFFFFEEF5),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    "3 mutual interests", 
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    color = Color(0xFFFF1493),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { },
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color(0xFFF5F5F5), CircleShape)
+                ) {
+                    Icon(Icons.Default.Close, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                }
+                IconButton(
+                    onClick = { },
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(
+                            Brush.linearGradient(listOf(Color(0xFFFF2D6C), Color(0xFFC71585))), 
+                            CircleShape
+                        )
+                ) {
+                    Icon(Icons.Default.Favorite, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SafetyBanner() {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xFFF9FAFB)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFFFFEEF5)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Shield, null, tint = Color(0xFFFF1493), modifier = Modifier.size(28.dp))
+                    Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Your safety is our priority", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(
+                    "We keep your data safe and ensure a secure dating experience.",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+            }
+            
+            Icon(Icons.Default.ChevronRight, null, tint = Color(0xFFFF1493))
+        }
+    }
+}
+
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

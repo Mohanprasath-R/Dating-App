@@ -905,6 +905,18 @@ class FirebaseRepository {
         awaitClose { subscription.remove() }
     }
 
+    fun observeLastLike(userId: String): Flow<Map<String, Any>?> = callbackFlow {
+        val subscription = firestore.collection("liked_profiles")
+            .whereEqualTo("toUserId", userId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(1)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                trySend(snapshot?.documents?.firstOrNull()?.data)
+            }
+        awaitClose { subscription.remove() }
+    }
+
     fun observeLikedByCount(userId: String): Flow<Int> = callbackFlow {
         val subscription = firestore.collection("liked_profiles")
             .whereEqualTo("toUserId", userId)

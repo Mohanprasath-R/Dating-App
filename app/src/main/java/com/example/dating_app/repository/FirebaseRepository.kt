@@ -133,6 +133,33 @@ class FirebaseRepository {
         }
     }
 
+    suspend fun updateFcmToken(userId: String, token: String): Result<Unit> {
+        return updateProfile(userId, mapOf("fcmToken" to token))
+    }
+
+    /**
+     * Checks if premium has expired and updates Firestore if necessary.
+     * This ensures the boolean flag is synced with the timestamp.
+     */
+    suspend fun syncPremiumStatus(userId: String): Result<Boolean> {
+        return try {
+            val user = getUser(userId).getOrNull()
+            if (user != null && user.is_premium && user.premium_expiry > 0) {
+                if (System.currentTimeMillis() > user.premium_expiry) {
+                    // Expired!
+                    updateProfile(userId, mapOf("is_premium" to false))
+                    Result.success(false)
+                } else {
+                    Result.success(true)
+                }
+            } else {
+                Result.success(user?.is_premium ?: false)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun updateLocation(userId: String, lat: Double, lon: Double): Result<Unit> {
         return updateProfile(userId, mapOf(
             "latitude" to lat,
@@ -1011,6 +1038,107 @@ class FirebaseRepository {
             }
             batch.commit().await()
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun requestSubscription(userId: String, planName: String, price: String): Result<Unit> {
+        return try {
+            val request = hashMapOf(
+                "userId" to userId,
+                "planName" to planName,
+                "price" to price,
+                "status" to "pending",
+                "timestamp" to System.currentTimeMillis()
+            )
+            firestore.collection("subscription_requests").document(userId).set(request).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun verifySubscriptionOTP(userId: String, otp: String): Result<Unit> {
+        return try {
+            val otpDoc = firestore.collection("subscription_otps").document(otp).get().await()
+            if (otpDoc.exists()) {
+                val otpUserId = otpDoc.getString("userId")
+                val isUsed = otpDoc.getBoolean("isUsed") ?: false
+                val expiryTimestamp = otpDoc.getLong("expiryTimestamp") ?: 0L
+                val durationDays = otpDoc.getLong("durationDays") ?: 30L
+
+                if (otpUserId == userId && !isUsed && System.currentTimeMillis() < expiryTimestamp) {
+                    // Valid OTP
+                    firestore.runTransaction { transaction ->
+                        // 1. Mark OTP as used
+                        transaction.update(otpDoc.reference, "isUsed", true)
+                        
+                        // 2. Update user's premium status
+                        val userRef = usersCollection.document(userId)
+                        transaction.update(userRef, "is_premium", true)
+                        transaction.update(userRef, "premium_expiry", System.currentTimeMillis() + (durationDays * 24 * 60 * 60 * 1000))
+                        
+                        // 3. Delete the request
+                        transaction.delete(firestore.collection("subscription_requests").document(userId))
+                    }.await()
+                    
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception("Invalid, used, or expired OTP"))
+                }
+            } else {
+                Result.failure(Exception("OTP not found"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // --- Optimized Discovery with Pagination & Filtering ---
+
+    suspend fun getDiscoveryProfiles(
+        currentUserId: String,
+        limit: Long = 20,
+        lastVisible: com.google.firebase.firestore.DocumentSnapshot? = null,
+        genderFilter: String? = null,
+        preferredCity: String? = null
+    ): Result<Pair<List<User>, com.google.firebase.firestore.DocumentSnapshot?>> {
+        return try {
+            // 1. Get IDs to exclude (already liked, disliked, or blocked)
+            val likedSnapshot = firestore.collection("liked_profiles").whereEqualTo("fromUserId", currentUserId).get().await()
+            val dislikedSnapshot = firestore.collection("disliked_profiles").whereEqualTo("fromUserId", currentUserId).get().await()
+            val blockedSnapshot = firestore.collection("blocked_users").whereEqualTo("blockerId", currentUserId).get().await()
+            
+            val excludeIds = (likedSnapshot.documents.mapNotNull { it.getString("toUserId") } +
+                              dislikedSnapshot.documents.mapNotNull { it.getString("toUserId") } +
+                              blockedSnapshot.documents.mapNotNull { it.getString("blockedId") } +
+                              currentUserId).toSet()
+
+            // 2. Build Query
+            var query: Query = usersCollection
+            
+            if (genderFilter != null && genderFilter != "All") {
+                query = query.whereEqualTo("gender", genderFilter)
+            }
+            
+            if (preferredCity != null && preferredCity.isNotEmpty()) {
+                query = query.whereEqualTo("city", preferredCity)
+            }
+
+            query = query.limit(limit)
+            
+            if (lastVisible != null) {
+                query = query.startAfter(lastVisible)
+            }
+
+            val snapshot = query.get().await()
+            
+            // 3. Filter out excluded IDs locally (Firestore 'notIn' is limited to 10 IDs)
+            val profiles = snapshot.toObjects(User::class.java).filter { it.id !in excludeIds }
+            val newLastVisible = if (snapshot.documents.isNotEmpty()) snapshot.documents.last() else null
+            
+            Result.success(Pair(profiles, newLastVisible))
         } catch (e: Exception) {
             Result.failure(e)
         }

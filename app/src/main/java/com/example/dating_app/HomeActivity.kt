@@ -240,13 +240,18 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
     // Fetch Current User Data & Observe Unread Counts
     LaunchedEffect(Unit) {
         auth.currentUser?.uid?.let { uid ->
-            repository.getUser(uid).onSuccess { user ->
+            repository.syncPremiumStatus(uid) // Sync status on app launch
+            repository.observeUser(uid).collectLatest { user ->
                 currentUserProfile = user
                 if (user != null) {
                     (context.applicationContext as MyApplication).initZegoService(uid, "${user.first_name} ${user.last_name}")
                 }
             }
-            
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        auth.currentUser?.uid?.let { uid ->
             // Real-time Unread Count Observation
             repository.observeUnreadMessageCount(uid).collectLatest { count ->
                 unreadMessageCount = count
@@ -446,12 +451,17 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                         onClick = { currentSubScreen = "settings"; scope.launch { drawerState.close() } }
                     )
                     CustomDrawerItem(
-                        label = "Upgrade to Premium",
-                        icon = Icons.Default.Diamond,
+                        label = if (currentUserProfile?.isPremiumActive() == true) "Premium Active" else "Upgrade to Premium",
+                        icon = if (currentUserProfile?.isPremiumActive() == true) Icons.Default.VerifiedUser else Icons.Default.Diamond,
                         iconColor = Color(0xFFFFB300),
                         iconBgColor = Color(0xFFFFF8E1),
-                        showBadge = true,
-                        onClick = { context.startActivity(Intent(context, PremiumActivity::class.java)); scope.launch { drawerState.close() } }
+                        showBadge = currentUserProfile?.isPremiumActive() != true,
+                        onClick = { 
+                            if (currentUserProfile?.isPremiumActive() != true) {
+                                context.startActivity(Intent(context, PremiumActivity::class.java))
+                            }
+                            scope.launch { drawerState.close() } 
+                        }
                     )
                     CustomDrawerItem(
                         label = "Safety Center",
@@ -891,7 +901,11 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                     onRefresh = { refreshTrigger++ }
                                 )
                                 HomeTab.Matches -> MatchesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
-                                HomeTab.Likes -> LikesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
+                                HomeTab.Likes -> LikesScreen(
+                                    onChatClick = onChatClick,
+                                    isPremium = currentUserProfile?.isPremiumActive() == true,
+                                    refreshTrigger = refreshTrigger
+                                )
                                 HomeTab.Message -> ModernChatListScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                                 HomeTab.Chat -> AstrologyChatView(
                                     user = currentUserProfile,
@@ -1027,6 +1041,7 @@ fun AstrologyChatView(
     modifier: Modifier = Modifier
 ) {
     val repository = remember { FirebaseRepository() }
+    val auth = remember { FirebaseAuth.getInstance() }
     var potentialMatches by remember { mutableStateOf<List<User>>(emptyList()) }
     
     var matchFlowState by remember { mutableStateOf(MatchFlowState.IDLE) }
@@ -1062,9 +1077,15 @@ fun AstrologyChatView(
                 when (matchFlowState) {
                     MatchFlowState.IDLE -> {
                         val input = text.lowercase()
+                        val userName = user?.first_name ?: "Seeker"
                         if (listOf("match", "girlfriend", "boyfriend", "someone", "love", "partner").any { input.contains(it) }) {
                             messages = messages + AstrologyMessage.Text("Astrologer", "I would be honored to help you find a companion. To begin our search, in which city shall we look for your match?")
                             matchFlowState = MatchFlowState.WAITING_FOR_CITY
+                        } else if (input.contains("horoscope") || input.contains("today") || input.contains("energy")) {
+                            messages = messages + AstrologyMessage.Text("Astrologer", "The cosmic currents are shifting for you, $userName. Let me consult the celestial charts...")
+                            delay(1500)
+                            val response = getAstrologyResponse(text, user, potentialMatches)
+                            messages = messages + AstrologyMessage.Text("Astrologer", response)
                         } else {
                             val aiResponse = getAstrologyResponse(text, user, potentialMatches)
                             messages = messages + AstrologyMessage.Text("Astrologer", aiResponse)
@@ -1355,7 +1376,7 @@ fun AstrologyChatView(
                                                 }
                                                 IconButton(
                                                     onClick = { 
-                                                        if (user?.is_premium == true) {
+                                                        if (user?.isPremiumActive() == true) {
                                                             onChatClick(match.first_name, match.id)
                                                             onDismiss?.invoke()
                                                         } else {
@@ -1579,7 +1600,7 @@ fun BlockedListScreen() {
     }
 }
 @Composable
-fun LikesSummaryBanner(likedByUsers: List<User>) {
+fun LikesSummaryBanner(likedByUsers: List<User>, isPremium: Boolean) {
     val context = LocalContext.current
     Surface(
         modifier = Modifier
@@ -1635,15 +1656,16 @@ fun LikesSummaryBanner(likedByUsers: List<User>) {
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                 Row(horizontalArrangement = Arrangement.spacedBy((-16).dp)) {
                     likedByUsers.take(4).forEach { user ->
-                        AsyncImage(
-                            model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .border(2.dp, Color.White, CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
+                            AsyncImage(
+                                model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .border(2.dp, Color.White, CircleShape)
+                                    .then(if (!isPremium) Modifier.blur(10.dp) else Modifier),
+                                contentScale = ContentScale.Crop
+                            )
                     }
                 }
             }
@@ -1651,16 +1673,18 @@ fun LikesSummaryBanner(likedByUsers: List<User>) {
             Spacer(modifier = Modifier.width(8.dp))
             
             // Button
-            Button(
-                onClick = { context.startActivity(Intent(context, PremiumActivity::class.java)) },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B21A8)),
-                shape = RoundedCornerShape(16.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp),
-                modifier = Modifier.height(40.dp)
-            ) {
-                Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("See all", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+            if (!isPremium) {
+                Button(
+                    onClick = { context.startActivity(Intent(context, PremiumActivity::class.java)) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B21A8)),
+                    shape = RoundedCornerShape(16.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    modifier = Modifier.height(40.dp)
+                ) {
+                    Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("See all", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
@@ -1746,7 +1770,7 @@ fun UpgradeToPremiumBanner() {
     }
 }
 @Composable
-fun LikesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) {
+fun LikesScreen(onChatClick: (String, String) -> Unit, isPremium: Boolean, refreshTrigger: Int = 0) {
     val repository = remember { FirebaseRepository() }
     val currentUser = remember { FirebaseAuth.getInstance().currentUser }
     val scope = rememberCoroutineScope()
@@ -1772,7 +1796,7 @@ fun LikesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) 
     ) {
         // Summary Banner
         item(span = { GridItemSpan(2) }) {
-            LikesSummaryBanner(likedByUsers)
+            LikesSummaryBanner(likedByUsers, isPremium)
         }
 
         // Section Header
@@ -1794,6 +1818,7 @@ fun LikesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) 
             items(likedByUsers) { user ->
                 LikedUserCard(
                     user = user,
+                    isPremium = isPremium,
                     onChatClick = { onChatClick(user.first_name, user.id) },
                     onLikeBack = {
                         scope.launch {
@@ -1813,8 +1838,10 @@ fun LikesScreen(onChatClick: (String, String) -> Unit, refreshTrigger: Int = 0) 
         }
 
         // Bottom Premium Banner
-        item(span = { GridItemSpan(2) }) {
-            UpgradeToPremiumBanner()
+        if (!isPremium) {
+            item(span = { GridItemSpan(2) }) {
+                UpgradeToPremiumBanner()
+            }
         }
     }
 }
@@ -1832,11 +1859,17 @@ fun EmptyLikesState() {
     }
 }
 @Composable
-fun LikedUserCard(user: User, onChatClick: () -> Unit, onLikeBack: () -> Unit, onReject: () -> Unit) {
+fun LikedUserCard(user: User, isPremium: Boolean, onChatClick: () -> Unit, onLikeBack: () -> Unit, onReject: () -> Unit) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(260.dp),
+            .height(260.dp)
+            .clickable { 
+                if (!isPremium) {
+                    context.startActivity(Intent(context, PremiumActivity::class.java))
+                }
+            },
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -1844,7 +1877,7 @@ fun LikedUserCard(user: User, onChatClick: () -> Unit, onLikeBack: () -> Unit, o
             AsyncImage(
                 model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().then(if (!isPremium) Modifier.blur(20.dp) else Modifier),
                 contentScale = ContentScale.Crop
             )
             
@@ -2498,12 +2531,40 @@ fun DiscoveryScreen(
     var isLoading by remember { mutableStateOf(true) }
     var matchedUser by remember { mutableStateOf<User?>(null) }
     
+    var lastVisibleDocument by remember { mutableStateOf<com.google.firebase.firestore.DocumentSnapshot?>(null) }
+    var isEndReached by remember { mutableStateOf(false) }
+
     val offsetX = remember { Animatable(0f) }
     val offsetY = remember { Animatable(0f) }
 
+    fun loadMoreProfiles() {
+        if (currentUser == null || isEndReached) return
+        
+        scope.launch {
+            repository.getDiscoveryProfiles(
+                currentUserId = currentUser.uid,
+                limit = 10,
+                lastVisible = lastVisibleDocument
+            ).onSuccess { (newProfiles, lastDoc) ->
+                if (newProfiles.isEmpty()) {
+                    isEndReached = true
+                } else {
+                    profiles = profiles + newProfiles
+                    lastVisibleDocument = lastDoc
+                }
+                isLoading = false
+            }.onFailure {
+                isLoading = false
+            }
+        }
+    }
+
     val onNext = {
         if (profiles.isNotEmpty()) {
-            currentIndex = (currentIndex + 1) % profiles.size
+            currentIndex++
+            if (currentIndex >= profiles.size - 2) {
+                loadMoreProfiles()
+            }
         }
         scope.launch {
             offsetX.snapTo(0f)
@@ -2512,8 +2573,8 @@ fun DiscoveryScreen(
     }
 
     val onPrevious = {
-        if (profiles.isNotEmpty()) {
-            currentIndex = (currentIndex - 1 + profiles.size) % profiles.size
+        if (currentIndex > 0) {
+            currentIndex--
         }
         scope.launch {
             offsetX.snapTo(0f)
@@ -2530,12 +2591,8 @@ fun DiscoveryScreen(
                 if (theyLikedMeSnapshot.any { it.id == profile.id }) {
                     matchedUser = profile
                 } else {
-                    if (profiles.isNotEmpty()) {
-                        currentIndex = (currentIndex + 1) % profiles.size
-                    }
+                    onNext()
                 }
-                offsetX.snapTo(0f)
-                offsetY.snapTo(0f)
             }
         }
     }
@@ -2545,58 +2602,31 @@ fun DiscoveryScreen(
             if (currentUser != null && currentIndex < profiles.size) {
                 val profile = profiles[currentIndex]
                 repository.dislikeProfile(currentUser.uid, profile.id)
-                if (profiles.isNotEmpty()) {
-                    currentIndex = (currentIndex + 1) % profiles.size
-                }
-                offsetX.snapTo(0f)
-                offsetY.snapTo(0f)
+                onNext()
             }
         }
     }
     
     LaunchedEffect(refreshTrigger) {
-        if (currentUser != null) {
-            isLoading = true
-            val allUsers = repository.getAllUsers(currentUser.uid).getOrDefault(emptyList())
-            val likedUsers = repository.getLikedProfiles(currentUser.uid).getOrDefault(emptyList())
-            val blockedUsers = repository.getBlockedUsers(currentUser.uid).getOrDefault(emptyList())
-            val dislikedIds = repository.getDislikedProfileIds(currentUser.uid).getOrDefault(emptySet())
-            val likedIds = likedUsers.map { it.id }.toSet()
-            val blockedIds = blockedUsers.map { it.id }.toSet()
-            profiles = allUsers.filter { it.id !in likedIds && it.id !in blockedIds && it.id !in dislikedIds }
-            currentIndex = 0 
-        }
-        isLoading = false
+        profiles = emptyList()
+        currentIndex = 0
+        lastVisibleDocument = null
+        isEndReached = false
+        isLoading = true
+        loadMoreProfiles()
     }
     
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF9FAFB))) {
-        if (isLoading) {
+        if (isLoading && profiles.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFFF1493)) }
-        } else if (profiles.isNotEmpty()) {
+        } else if (currentIndex < profiles.size) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(1f).padding(16.dp)) {
                     val swipeProgress = (kotlin.math.abs(offsetX.value) / 500f).coerceIn(0f, 1f)
                     
-                    // Card 2 (Bottom)
-                    if (profiles.size > 2) {
-                        val bottomIndex = (currentIndex + 2) % profiles.size
-                        DiscoveryCard(
-                            profile = profiles[bottomIndex],
-                            modifier = Modifier
-                                .graphicsLayer {
-                                    val scale = 0.90f + (0.05f * swipeProgress)
-                                    scaleX = scale
-                                    scaleY = scale
-                                    translationY = (30.dp.toPx()) * (1f - swipeProgress * 0.5f)
-                                    alpha = 0.3f + (0.2f * swipeProgress)
-                                },
-                            getAge = { getAge(it) }
-                        )
-                    }
-
-                    // Card 1 (Middle)
-                    if (profiles.size > 1) {
-                        val middleIndex = (currentIndex + 1) % profiles.size
+                    // Card 1 (Middle/Next)
+                    if (currentIndex + 1 < profiles.size) {
+                        val middleIndex = currentIndex + 1
                         DiscoveryCard(
                             profile = profiles[middleIndex],
                             modifier = Modifier
@@ -2890,8 +2920,19 @@ fun DiscoveryCard(
                             ) {
                                 Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
+                                
+                                val distanceText = remember(profile) {
+                                    val currentUser = FirebaseAuth.getInstance().currentUser
+                                    if (currentUser != null) {
+                                        // Since we don't have current user's lat/lon here easily, 
+                                        // let's assume a default or use a placeholder that calls LocationHelper if available
+                                        // In a real app, you'd pass the current user's location into this composable.
+                                        "Nearby"
+                                    } else "Location hidden"
+                                }
+
                                 Text(
-                                    text = "${profile.city} • 2km away",
+                                    text = "${profile.city} • $distanceText",
                                     color = Color.White,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
@@ -3215,6 +3256,7 @@ fun SecurityPrivacyScreen() {
 
     val securityItems = listOf(
         Triple("Two-Factor Authentication", "Add an extra layer of security", Icons.Default.VpnKey),
+        Triple("Biometric App Lock", "Unlock with fingerprint or face (Premium)", Icons.Default.Fingerprint),
         Triple("Login Activity", "Check where you're logged in", Icons.Default.Devices),
         Triple("Security Checkup", "Keep your account safe", Icons.Default.VerifiedUser)
     )
@@ -3255,7 +3297,35 @@ fun SecurityPrivacyScreen() {
                         }
                     }
                 },
-                trailingContent = { Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFFD1D1D1)) },
+                trailingContent = {
+                    if (title == "Biometric App Lock") {
+                        Switch(
+                            checked = user?.biometric_enabled ?: false,
+                            onCheckedChange = { enabled ->
+                                if (user?.isPremiumActive() == true) {
+                                    scope.launch {
+                                        auth.currentUser?.uid?.let { uid ->
+                                            repository.updateProfile(uid, mapOf("biometric_enabled" to enabled))
+                                                .onSuccess {
+                                                    user = user?.copy(biometric_enabled = enabled)
+                                                    Toast.makeText(context, "Biometric lock ${if(enabled) "enabled" else "disabled"}", Toast.LENGTH_SHORT).show()
+                                                }
+                                        }
+                                    }
+                                } else {
+                                    context.startActivity(Intent(context, PremiumActivity::class.java))
+                                    Toast.makeText(context, "Upgrade to Premium to enable Biometric Lock", Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFFFF1493)
+                            )
+                        )
+                    } else {
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFFD1D1D1))
+                    }
+                },
                 modifier = Modifier.clickable { 
                     when (title) {
                         "Two-Factor Authentication" -> {
@@ -3266,6 +3336,11 @@ fun SecurityPrivacyScreen() {
                         }
                         "Security Checkup" -> {
                             context.startActivity(Intent(context, SecurityCheckupActivity::class.java))
+                        }
+                        "Biometric App Lock" -> {
+                            if (user?.isPremiumActive() != true) {
+                                context.startActivity(Intent(context, PremiumActivity::class.java))
+                            }
                         }
                     }
                 }

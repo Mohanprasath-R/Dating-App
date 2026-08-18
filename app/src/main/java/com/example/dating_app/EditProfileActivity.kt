@@ -22,6 +22,7 @@ import coil.load
 import coil.transform.CircleCropTransformation
 import com.datingapp.R
 import com.example.dating_app.repository.FirebaseRepository
+import com.example.dating_app.util.ImageUtils
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
@@ -238,7 +239,8 @@ class EditProfileActivity : AppCompatActivity() {
 
                 // Upload profile image if changed
                 selectedImageUri?.let { uri ->
-                    val uploadResult = repository.uploadImageToCloudinary(uri, "profile_images")
+                    val compressedUri = ImageUtils.compressImage(this@EditProfileActivity, uri)
+                    val uploadResult = repository.uploadImageToCloudinary(compressedUri, "profile_images")
                     if (uploadResult.isSuccess) {
                         profileData["profile_image"] = uploadResult.getOrThrow()
                     } else {
@@ -250,7 +252,8 @@ class EditProfileActivity : AppCompatActivity() {
 
                 // Upload cover image if changed
                 selectedCoverUri?.let { uri ->
-                    val uploadResult = repository.uploadImageToCloudinary(uri, "cover_images")
+                    val compressedUri = ImageUtils.compressImage(this@EditProfileActivity, uri)
+                    val uploadResult = repository.uploadImageToCloudinary(compressedUri, "cover_images")
                     if (uploadResult.isSuccess) {
                         profileData["cover_image"] = uploadResult.getOrThrow()
                     } else {

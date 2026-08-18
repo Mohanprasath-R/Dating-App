@@ -45,6 +45,7 @@ import androidx.lifecycle.lifecycleScope
 import coil.compose.AsyncImage
 import com.datingapp.R
 import com.example.dating_app.repository.FirebaseRepository
+import com.example.dating_app.util.ImageUtils
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import java.util.*
@@ -75,7 +76,8 @@ class CompleteProfileActivity : ComponentActivity() {
             val finalData = profileData.toMutableMap()
             
             imageUri?.let { uri ->
-                val uploadResult = repository.uploadImageToCloudinary(uri, "profile_images")
+                val compressedUri = ImageUtils.compressImage(this@CompleteProfileActivity, uri)
+                val uploadResult = repository.uploadImageToCloudinary(compressedUri, "profile_images")
                 uploadResult.onSuccess { url ->
                     finalData["profile_image"] = url
                 }

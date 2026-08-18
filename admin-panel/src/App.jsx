@@ -4,6 +4,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase-config';
 import DashboardPage from './routes/DashboardPage';
 import UsersPage from './routes/UsersPage';
+import SubscriptionsPage from './routes/SubscriptionsPage';
 import ConversationPage from './routes/ConversationPage';
 import ProfilePage from './routes/ProfilePage';
 import RelationshipPage from './routes/RelationshipPage';
@@ -72,6 +73,12 @@ function App() {
             >
               Users
             </NavLink>
+            <NavLink
+              to="/subscriptions"
+              className={({ isActive }) => `rounded-3xl px-4 py-3 text-sm font-semibold transition ${isActive ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-[0_16px_42px_rgba(255,77,141,0.23)]' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}
+            >
+              Subscriptions
+            </NavLink>
           </nav>
         </aside>
 
@@ -88,6 +95,7 @@ function App() {
             <Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/users" element={<UsersPage />} />
+              <Route path="/subscriptions" element={<SubscriptionsPage />} />
               <Route path="/profiles/:userId" element={<ProfilePage />} />
               <Route path="/profiles/:userId/likes" element={<RelationshipPage relType="likes" />} />
               <Route path="/profiles/:userId/dislikes" element={<RelationshipPage relType="dislikes" />} />

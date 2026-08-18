@@ -37,6 +37,7 @@ data class User(
     val looking_for: String = "",
     val interests: List<String> = emptyList(),
     val is_premium: Boolean = false,
+    val premium_expiry: Long = 0L,
     val likes: Int = 0,
     val matches: Int = 0,
     val photos_count: Int = 0,
@@ -44,4 +45,8 @@ data class User(
     val muted_chats: List<String> = emptyList(),
     val created_at: Long = System.currentTimeMillis(),
     val updated_at: Long = System.currentTimeMillis()
-)
+) {
+    fun isPremiumActive(): Boolean {
+        return is_premium && (premium_expiry == 0L || System.currentTimeMillis() < premium_expiry)
+    }
+}

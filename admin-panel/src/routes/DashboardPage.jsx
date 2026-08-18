@@ -5,6 +5,7 @@ import { db } from '../../firebase-config';
 function DashboardPage() {
   const [reports, setReports] = useState([]);
   const [users, setUsers] = useState({});
+  const [subRequests, setSubRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState(null);
   const [chatPreview, setChatPreview] = useState([]);
@@ -33,9 +34,14 @@ function DashboardPage() {
       setUsers(userMap);
     });
 
+    const unsubscribeSubs = onSnapshot(collection(db, 'subscription_requests'), (snapshot) => {
+      setSubRequests(snapshot.docs.map(doc => doc.data()));
+    });
+
     return () => {
       unsubscribeReports();
       unsubscribeUsers();
+      unsubscribeSubs();
     };
   }, []);
 
@@ -93,7 +99,7 @@ function DashboardPage() {
       
 
       {/* Stats Grid */}
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <article className="relative overflow-hidden rounded-[24px] border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 p-6 transition-all duration-300 hover:-translate-y-1 group">
           <div className="relative z-10">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400 opacity-80">Active Users</p>
@@ -110,6 +116,15 @@ function DashboardPage() {
             <span className="text-xs text-slate-400 mt-2 block">Awaiting review</span>
           </div>
           <div className="absolute -right-4 -bottom-4 h-24 w-24 rounded-full bg-amber-500/20 blur-2xl group-hover:bg-amber-500/30 transition-colors" />
+        </article>
+
+        <article className="relative overflow-hidden rounded-[24px] border border-blue-500/20 bg-gradient-to-br from-blue-500/10 to-indigo-500/5 p-6 transition-all duration-300 hover:-translate-y-1 group">
+          <div className="relative z-10">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400 opacity-80">Premium Requests</p>
+            <h3 className="text-4xl font-bold text-white mt-2 group-hover:scale-105 transition-transform origin-left">{subRequests.length}</h3>
+            <span className="text-xs text-slate-400 mt-2 block">Awaiting OTP</span>
+          </div>
+          <div className="absolute -right-4 -bottom-4 h-24 w-24 rounded-full bg-blue-500/20 blur-2xl group-hover:bg-blue-500/30 transition-colors" />
         </article>
         
         <article className="relative overflow-hidden rounded-[24px] border border-rose-500/20 bg-gradient-to-br from-rose-500/10 to-pink-500/5 p-6 transition-all duration-300 hover:-translate-y-1 group">

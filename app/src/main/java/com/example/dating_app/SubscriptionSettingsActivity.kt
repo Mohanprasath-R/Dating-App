@@ -2,11 +2,13 @@ package com.example.dating_app
 
 import android.os.Bundle
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +33,8 @@ import androidx.compose.ui.unit.sp
 import com.example.dating_app.model.User
 import com.example.dating_app.repository.FirebaseRepository
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class SubscriptionSettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,17 +53,65 @@ class SubscriptionSettingsActivity : ComponentActivity() {
 fun SubscriptionSettingsScreen(onBack: () -> Unit) {
     val repository = remember { FirebaseRepository() }
     val auth = remember { FirebaseAuth.getInstance() }
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var user by remember { mutableStateOf<User?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var showOtpDialog by remember { mutableStateOf(false) }
+    var otpValue by remember { mutableStateOf("") }
+    var isVerifying by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         auth.currentUser?.uid?.let { uid ->
-            repository.getUser(uid).onSuccess { fetchedUser ->
+            repository.observeUser(uid).collectLatest { fetchedUser ->
                 user = fetchedUser
+                isLoading = false
             }
         }
-        isLoading = false
+    }
+
+    if (showOtpDialog) {
+        AlertDialog(
+            onDismissRequest = { showOtpDialog = false },
+            title = { Text("Activate Premium") },
+            text = {
+                Column {
+                    Text("Enter the activation code provided by the admin.")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = otpValue,
+                        onValueChange = { otpValue = it },
+                        label = { Text("Activation Code") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val uid = auth.currentUser?.uid ?: return@Button
+                        isVerifying = true
+                        scope.launch {
+                            repository.verifySubscriptionOTP(uid, otpValue)
+                                .onSuccess {
+                                    Toast.makeText(context, "Premium Activated!", Toast.LENGTH_SHORT).show()
+                                    showOtpDialog = false
+                                }
+                                .onFailure {
+                                    Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            isVerifying = false
+                        }
+                    },
+                    enabled = otpValue.isNotBlank() && !isVerifying
+                ) {
+                    Text("Activate")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOtpDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 
     Scaffold(
@@ -89,11 +141,15 @@ fun SubscriptionSettingsScreen(onBack: () -> Unit) {
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (user?.is_premium == true) {
+                if (user?.isPremiumActive() == true) {
                     PremiumActiveCard()
                 } else {
                     FreePlanCard {
                         context.startActivity(Intent(context, PremiumActivity::class.java))
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextButton(onClick = { showOtpDialog = true }) {
+                        Text("Have an activation code?", color = Color(0xFFFF1493), fontWeight = FontWeight.Bold)
                     }
                 }
 

@@ -116,6 +116,15 @@
         <activity
             android:name="com.example.dating_app.SubscriptionSettingsActivity"
             android:exported="false" />
+
+        <service
+            android:name="com.example.dating_app.util.MyFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name="com.example.dating_app.MainActivity"
             android:exported="true"

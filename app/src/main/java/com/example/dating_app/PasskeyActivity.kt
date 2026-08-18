@@ -96,7 +96,7 @@ class PasskeyActivity : FragmentActivity() {
                     } else if (userPin != null) {
                         PasskeyScreen(
                             correctPasscode = userPin!!,
-                            biometricEnabled = currentUserData?.biometric_enabled ?: false,
+                            biometricEnabled = currentUserData?.isPremiumActive() == true && currentUserData?.biometric_enabled == true,
                             onSuccess = {
                                 // Initialization after successful PIN entry
                                 currentUserData?.let { user ->

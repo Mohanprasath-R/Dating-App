@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import android.widget.Toast
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -21,11 +22,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.dating_app.repository.FirebaseRepository
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.launch
 
 class PremiumActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,12 +46,69 @@ class PremiumActivity : ComponentActivity() {
 
 @Composable
 fun PremiumScreen(onClose: () -> Unit) {
+    val context = LocalContext.current
+    val repository = remember { FirebaseRepository() }
+    val auth = remember { FirebaseAuth.getInstance() }
+    val scope = rememberCoroutineScope()
     var selectedPlan by remember { mutableIntStateOf(1) } // 0: 1 Month, 1: 6 Months, 2: 12 Months
+    var showOtpDialog by remember { mutableStateOf(false) }
+    var otpValue by remember { mutableStateOf("") }
+    var isVerifying by remember { mutableStateOf(false) }
 
-    // No scrolling: everything is laid out in normal flow so the whole
-    // screen (header, hero, benefits, pricing, CTA) always fits on screen.
-    // The middle block gets the remaining space and centers its content,
-    // so it compresses gracefully on shorter screens instead of clipping.
+    val plans = listOf(
+        Triple("1 Month", "\u20b9599", "Save 21%"),
+        Triple("6 Months", "\u20b9379", "Save 40%"),
+        Triple("12 Months", "\u20b9459", "Save 50%")
+    )
+
+    if (showOtpDialog) {
+        AlertDialog(
+            onDismissRequest = { showOtpDialog = false },
+            title = { Text("Enter Activation Code") },
+            text = {
+                Column {
+                    Text("Please enter the OTP provided by the admin to activate your premium subscription.")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = otpValue,
+                        onValueChange = { otpValue = it },
+                        label = { Text("Activation Code") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val uid = auth.currentUser?.uid ?: return@Button
+                        isVerifying = true
+                        scope.launch {
+                            repository.verifySubscriptionOTP(uid, otpValue)
+                                .onSuccess {
+                                    Toast.makeText(context, "Premium Activated Successfully!", Toast.LENGTH_LONG).show()
+                                    showOtpDialog = false
+                                    onClose()
+                                }
+                                .onFailure {
+                                    Toast.makeText(context, "Invalid or Expired Code: ${it.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            isVerifying = false
+                        }
+                    },
+                    enabled = otpValue.isNotBlank() && !isVerifying,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF2D6C))
+                ) {
+                    if (isVerifying) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+                    else Text("Activate")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOtpDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -226,7 +288,20 @@ fun PremiumScreen(onClose: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Button(
-                    onClick = { },
+                    onClick = {
+                        val uid = auth.currentUser?.uid ?: return@Button
+                        val plan = plans[selectedPlan]
+                        scope.launch {
+                            repository.requestSubscription(uid, plan.first, plan.second)
+                                .onSuccess {
+                                    Toast.makeText(context, "Request sent to Admin. Contact support for activation code.", Toast.LENGTH_LONG).show()
+                                    showOtpDialog = true
+                                }
+                                .onFailure {
+                                    Toast.makeText(context, "Failed to send request: ${it.message}", Toast.LENGTH_SHORT).show()
+                                }
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp),
@@ -298,6 +373,16 @@ fun PremiumScreen(onClose: () -> Unit) {
                         fontWeight = FontWeight.Medium
                     )
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Already have an activation code?",
+                    fontSize = 12.sp,
+                    color = Color(0xFFFF2D6C),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { showOtpDialog = true }
+                )
             }
         }
     }

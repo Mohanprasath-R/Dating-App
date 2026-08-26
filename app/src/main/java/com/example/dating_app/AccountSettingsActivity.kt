@@ -1,6 +1,7 @@
 package com.example.dating_app
 
 import android.os.Bundle
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -105,16 +106,73 @@ fun AccountSettingsScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(24.dp))
 
                 AccountSection("Account Actions") {
+                    var showDeleteDialog by remember { mutableStateOf(false) }
+                    var showDeactivateDialog by remember { mutableStateOf(false) }
+
+                    if (showDeleteDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showDeleteDialog = false },
+                            title = { Text("Delete Account") },
+                            text = { Text("Are you sure you want to permanently delete your account? This action cannot be undone.") },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            auth.currentUser?.uid?.let { uid ->
+                                                repository.deleteAccount(uid).onSuccess {
+                                                    context.startActivity(Intent(context, LoginActivity::class.java).apply {
+                                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                                    })
+                                                }
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                                ) { Text("Delete") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                            }
+                        )
+                    }
+
+                    if (showDeactivateDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showDeactivateDialog = false },
+                            title = { Text("Deactivate Account") },
+                            text = { Text("Deactivating your account will hide your profile from everyone until you log back in.") },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            auth.currentUser?.uid?.let { uid ->
+                                                repository.updateProfile(uid, mapOf("is_active" to false)).onSuccess {
+                                                    auth.signOut()
+                                                    context.startActivity(Intent(context, LoginActivity::class.java).apply {
+                                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                                    })
+                                                }
+                                            }
+                                        }
+                                    }
+                                ) { Text("Deactivate") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showDeactivateDialog = false }) { Text("Cancel") }
+                            }
+                        )
+                    }
+
                     ListItem(
                         headlineContent = { Text("Deactivate Account", color = Color.Gray) },
                         leadingContent = { Icon(Icons.Default.PauseCircle, contentDescription = null, tint = Color.Gray) },
-                        modifier = Modifier.background(Color.White)
+                        modifier = Modifier.background(Color.White).clickable { showDeactivateDialog = true }
                     )
                     HorizontalDivider(color = Color(0xFFF3F4F6))
                     ListItem(
                         headlineContent = { Text("Delete Account", color = Color.Red, fontWeight = FontWeight.Bold) },
                         leadingContent = { Icon(Icons.Default.DeleteForever, contentDescription = null, tint = Color.Red) },
-                        modifier = Modifier.background(Color.White)
+                        modifier = Modifier.background(Color.White).clickable { showDeleteDialog = true }
                     )
                 }
             }

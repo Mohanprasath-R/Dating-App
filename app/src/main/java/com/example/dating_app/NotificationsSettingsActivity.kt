@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.dating_app.model.User
 import com.example.dating_app.repository.FirebaseRepository
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
@@ -46,10 +47,33 @@ fun NotificationsSettingsScreen(onBack: () -> Unit) {
     val auth = remember { FirebaseAuth.getInstance() }
     val scope = rememberCoroutineScope()
     
-    var pushEnabled by remember { mutableStateOf(true) }
-    var emailEnabled by remember { mutableStateOf(false) }
-    var matchesEnabled by remember { mutableStateOf(true) }
-    var messagesEnabled by remember { mutableStateOf(true) }
+    var user by remember { mutableStateOf<User?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        auth.currentUser?.uid?.let { uid ->
+            repository.getUser(uid).onSuccess { fetchedUser ->
+                user = fetchedUser
+            }
+        }
+        isLoading = false
+    }
+
+    val updateNotifications: (String, Boolean) -> Unit = { field, enabled ->
+        scope.launch {
+            auth.currentUser?.uid?.let { uid ->
+                repository.updateProfile(uid, mapOf(field to enabled)).onSuccess {
+                    user = when(field) {
+                        "push_enabled" -> user?.copy(push_enabled = enabled)
+                        "email_enabled" -> user?.copy(email_enabled = enabled)
+                        "matches_notif" -> user?.copy(matches_notif = enabled)
+                        "messages_notif" -> user?.copy(messages_notif = enabled)
+                        else -> user
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -64,52 +88,59 @@ fun NotificationsSettingsScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(Color(0xFFF9FAFB))
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-        ) {
-            Text(
-                "Push Notifications",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Gray,
-                modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
-            )
-            
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                shadowElevation = 1.dp
-            ) {
-                Column {
-                    NotificationToggleItem("Allow Push Notifications", pushEnabled) { pushEnabled = it }
-                    HorizontalDivider(color = Color(0xFFF3F4F6))
-                    NotificationToggleItem("New Matches", matchesEnabled && pushEnabled) { matchesEnabled = it }
-                    HorizontalDivider(color = Color(0xFFF3F4F6))
-                    NotificationToggleItem("New Messages", messagesEnabled && pushEnabled) { messagesEnabled = it }
-                }
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color(0xFFFF1493))
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                "Email Notifications",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Gray,
-                modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
-            )
-            
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                shadowElevation = 1.dp
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .background(Color(0xFFF9FAFB))
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
             ) {
-                NotificationToggleItem("Promotional Emails", emailEnabled) { emailEnabled = it }
+                Text(
+                    "Push Notifications",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+                )
+                
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White,
+                    shadowElevation = 1.dp
+                ) {
+                    val push = user?.push_enabled ?: true
+                    Column {
+                        NotificationToggleItem("Allow Push Notifications", push) { updateNotifications("push_enabled", it) }
+                        HorizontalDivider(color = Color(0xFFF3F4F6))
+                        NotificationToggleItem("New Matches", (user?.matches_notif ?: true) && push) { updateNotifications("matches_notif", it) }
+                        HorizontalDivider(color = Color(0xFFF3F4F6))
+                        NotificationToggleItem("New Messages", (user?.messages_notif ?: true) && push) { updateNotifications("messages_notif", it) }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    "Email Notifications",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+                )
+                
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White,
+                    shadowElevation = 1.dp
+                ) {
+                    NotificationToggleItem("Promotional Emails", user?.email_enabled ?: false) { updateNotifications("email_enabled", it) }
+                }
             }
         }
     }

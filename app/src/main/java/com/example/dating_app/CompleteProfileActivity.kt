@@ -268,6 +268,7 @@ fun CompleteProfileScreen(
                                 "country" to country,
                                 "state" to state,
                                 "city" to city,
+                                "city_lowercase" to city.lowercase().trim(),
                                 "language" to languages,
                                 "interests" to selectedInterests.toList(),
                                 "other_interest" to otherInterest

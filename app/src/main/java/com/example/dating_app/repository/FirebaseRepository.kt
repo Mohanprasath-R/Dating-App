@@ -14,6 +14,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
+import com.example.dating_app.util.DateUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -434,6 +435,50 @@ class FirebaseRepository {
                 .await()
             val ids = snapshot.documents.mapNotNull { it.getString("toUserId") }.toSet()
             Result.success(ids)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getDislikedProfiles(userId: String): Result<List<User>> {
+        return try {
+            val snapshot = firestore.collection("disliked_profiles")
+                .whereEqualTo("fromUserId", userId)
+                .get()
+                .await()
+            
+            val dislikedIds = snapshot.documents.mapNotNull { it.getString("toUserId") }
+            if (dislikedIds.isEmpty()) return Result.success(emptyList())
+
+            val usersSnapshot = usersCollection.get().await()
+            val allUsers = usersSnapshot.toObjects(User::class.java)
+            val dislikedUsers = allUsers.filter { it.id in dislikedIds }
+            
+            Result.success(dislikedUsers)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun undislikeProfile(fromUserId: String, toUserId: String): Result<Unit> {
+        return try {
+            firestore.collection("disliked_profiles")
+                .document("${fromUserId}_${toUserId}")
+                .delete()
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun checkMatch(userId1: String, userId2: String): Result<Boolean> {
+        return try {
+            val doc = firestore.collection("liked_profiles")
+                .document("${userId2}_${userId1}")
+                .get()
+                .await()
+            Result.success(doc.exists())
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1102,7 +1147,9 @@ class FirebaseRepository {
         limit: Long = 20,
         lastVisible: com.google.firebase.firestore.DocumentSnapshot? = null,
         genderFilter: String? = null,
-        preferredCity: String? = null
+        preferredCity: String? = null,
+        minAge: Int = 18,
+        maxAge: Int = 100
     ): Result<Pair<List<User>, com.google.firebase.firestore.DocumentSnapshot?>> {
         return try {
             // 1. Get IDs to exclude (already liked, disliked, or blocked)
@@ -1123,7 +1170,7 @@ class FirebaseRepository {
             }
             
             if (preferredCity != null && preferredCity.isNotEmpty()) {
-                query = query.whereEqualTo("city", preferredCity)
+                query = query.whereEqualTo("city_lowercase", preferredCity.lowercase().trim())
             }
 
             query = query.limit(limit)
@@ -1134,8 +1181,11 @@ class FirebaseRepository {
 
             val snapshot = query.get().await()
             
-            // 3. Filter out excluded IDs locally (Firestore 'notIn' is limited to 10 IDs)
-            val profiles = snapshot.toObjects(User::class.java).filter { it.id !in excludeIds }
+            // 3. Filter out excluded IDs and age range locally
+            val profiles = snapshot.toObjects(User::class.java).filter { user ->
+                val age = DateUtils.getAgeFromDob(user.dob)
+                user.id !in excludeIds && age in minAge..maxAge
+            }
             val newLastVisible = if (snapshot.documents.isNotEmpty()) snapshot.documents.last() else null
             
             Result.success(Pair(profiles, newLastVisible))

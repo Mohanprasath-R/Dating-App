@@ -2,7 +2,6 @@
 
 package com.example.dating_app
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,6 +44,13 @@ import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +77,7 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
     var selectedChatItemForMenu by remember { mutableStateOf<ChatListItem?>(null) }
     val sheetState = rememberModalBottomSheetState()
     var showBottomSheet by remember { mutableStateOf(false) }
+    var matchedUserForOverlay by remember { mutableStateOf<User?>(null) }
 
     LaunchedEffect(refreshTrigger, localRefreshTrigger) {
         currentUser?.let { user ->
@@ -310,31 +317,30 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
                             }
                         }
 
-                        // Request Card
-                        if (visibleRequests.isNotEmpty()) {
-                            item {
-                                ModernRequestItem(
-                                    user = visibleRequests.first(),
-                                    onAccept = {
-                                        scope.launch {
-                                            currentUser?.let { me ->
-                                                repository.likeProfile(me.uid, visibleRequests.first().id).onSuccess {
-                                                    localRefreshTrigger++
-                                                }
-                                            }
-                                        }
-                                    },
-                                    onReject = {
-                                        scope.launch {
-                                            currentUser?.let { me ->
-                                                repository.blockUser(me.uid, visibleRequests.first().id).onSuccess {
-                                                    localRefreshTrigger++
-                                                }
+                        // Request Cards
+                        items(visibleRequests) { user ->
+                            ModernRequestItem(
+                                user = user,
+                                onAccept = {
+                                    scope.launch {
+                                        currentUser?.let { me ->
+                                            repository.likeProfile(me.uid, user.id).onSuccess {
+                                                localRefreshTrigger++
+                                                matchedUserForOverlay = user
                                             }
                                         }
                                     }
-                                )
-                            }
+                                },
+                                onReject = {
+                                    scope.launch {
+                                        currentUser?.let { me ->
+                                            repository.blockUser(me.uid, user.id).onSuccess {
+                                                localRefreshTrigger++
+                                            }
+                                        }
+                                    }
+                                }
+                            )
                         }
 
                         // Suggestions Header
@@ -404,6 +410,20 @@ fun ModernChatListScreen(onChatClick: (String, String) -> Unit, refreshTrigger: 
                 }
             )
         }
+    }
+
+    if (matchedUserForOverlay != null) {
+        MatchOverlay(
+            matchedUser = matchedUserForOverlay!!,
+            onSendMessage = {
+                val user = matchedUserForOverlay!!
+                matchedUserForOverlay = null
+                onChatClick(user.first_name, user.id)
+            },
+            onKeepSwiping = {
+                matchedUserForOverlay = null
+            }
+        )
     }
 }
 

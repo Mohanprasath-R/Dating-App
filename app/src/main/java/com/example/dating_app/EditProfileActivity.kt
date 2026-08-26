@@ -231,6 +231,7 @@ class EditProfileActivity : AppCompatActivity() {
                     "country" to etCountry.text.toString(),
                     "state" to etState.text.toString(),
                     "city" to etCity.text.toString(),
+                    "city_lowercase" to etCity.text.toString().lowercase().trim(),
                     "language" to etLanguage.text.toString(),
                     "timezone" to etTimezone.text.toString(),
                     "interests" to selectedInterestsList,

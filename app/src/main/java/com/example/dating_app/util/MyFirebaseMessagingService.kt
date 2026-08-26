@@ -22,8 +22,19 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
         
+        // Handle Notification payload
         remoteMessage.notification?.let {
-            sendNotification(it.title ?: "Notification", it.body ?: "")
+            sendNotification(it.title ?: "New Notification", it.body ?: "")
+            return
+        }
+
+        // Handle Data payload
+        if (remoteMessage.data.isNotEmpty()) {
+            val title = remoteMessage.data["title"] ?: "New Notification"
+            val body = remoteMessage.data["body"] ?: remoteMessage.data["message"] ?: ""
+            if (body.isNotBlank()) {
+                sendNotification(title, body)
+            }
         }
     }
 
@@ -47,12 +58,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         val channelId = "dating_app_general"
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.ic_google) // Placeholder
+            .setSmallIcon(R.drawable.ic_heart)
             .setContentTitle(title)
             .setContentText(messageBody)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 

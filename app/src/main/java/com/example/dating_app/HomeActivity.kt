@@ -28,6 +28,8 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,10 +102,47 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.*
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+
+import com.google.firebase.messaging.FirebaseMessaging
+
 class HomeActivity : ComponentActivity() {
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            // Permission granted
+        } else {
+            // Permission denied
+        }
+    }
+
+    private fun askNotificationPermission() {
+        // This is only necessary for API level >= 33 (Android 13)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                // FCM SDK (and your app) can post notifications.
+            } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+                // Show an explanation to the user as to why your app needs the permission
+            } else {
+                // Directly ask for the permission
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        
+        askNotificationPermission()
+
         setContent {
             val scope = rememberCoroutineScope()
             val repository = remember { FirebaseRepository() }
@@ -237,10 +276,23 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
     var bannerType by remember { mutableStateOf("message") } // "message" or "like"
     var showNotificationBanner by remember { mutableStateOf(false) }
 
+    // Filter States
+    var genderFilter by remember { mutableStateOf("All") }
+    var preferredCity by remember { mutableStateOf("") }
+    var ageRangeFilter by remember { mutableStateOf(18f..100f) }
+
     // Fetch Current User Data & Observe Unread Counts
     LaunchedEffect(Unit) {
         auth.currentUser?.uid?.let { uid ->
             repository.syncPremiumStatus(uid) // Sync status on app launch
+            
+            // Update FCM Token
+            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                scope.launch {
+                    repository.updateFcmToken(uid, token)
+                }
+            }
+
             repository.observeUser(uid).collectLatest { user ->
                 currentUserProfile = user
                 if (user != null) {
@@ -321,6 +373,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
 
     val topBarTitle = when {
         currentSubScreen == "blocked" -> "Blocked List"
+        currentSubScreen == "rejected" -> "Rejected List"
         currentSubScreen == "profile" -> "Profile"
         currentSubScreen == "settings" -> "Settings"
         currentSubScreen == "safety" -> "Safety Center"
@@ -330,6 +383,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
         currentSubScreen == "faq" -> "FAQ"
         currentSubScreen == "contact" -> "Contact Support"
         currentSubScreen == "report" -> "Report a Problem"
+        currentSubScreen == "about" -> "About HeyDate"
         currentSubScreen == "terms" -> "Terms of Service"
         currentSubScreen == "privacy" -> "Privacy Policy"
         currentSubScreen == "safety_guidelines" -> "Safety Guidelines"
@@ -476,6 +530,13 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                         iconColor = Color(0xFFEF5350),
                         iconBgColor = Color(0xFFFFEBEE),
                         onClick = { currentSubScreen = "blocked"; scope.launch { drawerState.close() } }
+                    )
+                    CustomDrawerItem(
+                        label = "Rejected List",
+                        icon = Icons.Default.DeleteSweep,
+                        iconColor = Color(0xFFFF9800),
+                        iconBgColor = Color(0xFFFFF3E0),
+                        onClick = { currentSubScreen = "rejected"; scope.launch { drawerState.close() } }
                     )
                     CustomDrawerItem(
                         label = "Security & Privacy",
@@ -638,10 +699,23 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                 if (currentSubScreen != "profile") {
                     TopAppBar(
                         title = { 
-                            Text(
-                                text = topBarTitle, 
-                                color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 24.sp
-                            ) 
+                            if (selectedTab == HomeTab.Discovery && currentSubScreen == null) {
+                                Column {
+                                    Text(
+                                        text = "Discover",
+                                        color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 20.sp
+                                    )
+                                    Text(
+                                        text = "${if(preferredCity.isEmpty()) "Anywhere" else preferredCity} • ${ageRangeFilter.start.toInt()}-${ageRangeFilter.endInclusive.toInt()}",
+                                        color = Color.Gray, fontSize = 12.sp
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = topBarTitle, 
+                                    color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 24.sp
+                                ) 
+                            }
                         },
                         navigationIcon = {
                             IconButton(onClick = { 
@@ -704,7 +778,13 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
             floatingActionButton = {
                 if (currentSubScreen == null && selectedTab == HomeTab.Matches) {
                     FloatingActionButton(
-                        onClick = { showAstrologyModal = true },
+                        onClick = { 
+                            if (currentUserProfile?.isPremiumActive() == true) {
+                                showAstrologyModal = true 
+                            } else {
+                                context.startActivity(Intent(context, PremiumActivity::class.java))
+                            }
+                        },
                         containerColor = Color(0xFFFF2D6C),
                         contentColor = Color.White,
                         shape = CircleShape,
@@ -713,11 +793,27 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                             .size(64.dp)
                             .shadow(12.dp, CircleShape)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "AI Assistant",
-                            modifier = Modifier.size(32.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "AI Assistant",
+                                modifier = Modifier.size(32.dp)
+                            )
+                            if (currentUserProfile?.isPremiumActive() != true) {
+                                Surface(
+                                    color = Color.Black.copy(alpha = 0.5f),
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(16.dp).align(Alignment.BottomEnd).offset(x = 2.dp, y = 2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Locked",
+                                        tint = Color.White,
+                                        modifier = Modifier.padding(3.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             },
@@ -755,7 +851,13 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                             .clickable(
                                                 interactionSource = remember { MutableInteractionSource() },
                                                 indication = null,
-                                                onClick = { selectedTab = tab }
+                                                onClick = { 
+                                                    if (tab == HomeTab.Chat && currentUserProfile?.isPremiumActive() != true) {
+                                                        context.startActivity(Intent(context, PremiumActivity::class.java))
+                                                    } else {
+                                                        selectedTab = tab 
+                                                    }
+                                                }
                                             )
                                     ) {
                                         Box(
@@ -804,6 +906,16 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                                                 modifier = Modifier.size(10.dp).offset(x = 6.dp, y = (-6).dp)
                                                             )
                                                         }
+                                                        HomeTab.Chat -> {
+                                                            if (currentUserProfile?.isPremiumActive() != true) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Lock,
+                                                                    contentDescription = "Locked",
+                                                                    tint = Color.Gray,
+                                                                    modifier = Modifier.size(10.dp).offset(x = 4.dp, y = (-4).dp)
+                                                                )
+                                                            }
+                                                        }
                                                         else -> {}
                                                     }
                                                 }
@@ -814,7 +926,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                                         HomeTab.Matches -> Icons.Default.People
                                                         HomeTab.Likes -> Icons.Default.Favorite
                                                         HomeTab.Message -> Icons.Default.Chat
-                                                        HomeTab.Chat -> Icons.Default.AccountCircle
+                                                        HomeTab.Chat -> Icons.Default.AutoAwesome
                                                     },
                                                     contentDescription = tab.label,
                                                     tint = contentColor,
@@ -865,14 +977,24 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                 Box(modifier = Modifier.padding(contentPadding)) {
                     when {
                         currentSubScreen == "blocked" -> BlockedListScreen()
+                        currentSubScreen == "rejected" -> RejectedListScreen()
                         currentSubScreen == "settings" -> SettingsScreen(onOptionClick = { currentSubScreen = it })
-                        currentSubScreen == "safety" -> SafetyCenterScreen()
-                        currentSubScreen == "filters" -> FiltersScreen()
+                        currentSubScreen == "safety" -> SafetyCenterScreen(onOptionClick = { currentSubScreen = it })
+                        currentSubScreen == "filters" -> FiltersScreen(
+                            currentGender = genderFilter,
+                            onGenderChange = { genderFilter = it },
+                            currentCity = preferredCity,
+                            onCityChange = { preferredCity = it },
+                            currentAgeRange = ageRangeFilter,
+                            onAgeRangeChange = { ageRangeFilter = it },
+                            onApply = { currentSubScreen = null }
+                        )
                         currentSubScreen == "security" -> SecurityPrivacyScreen()
                         currentSubScreen == "help" -> HelpSupportScreen(onOptionClick = { currentSubScreen = it })
                         currentSubScreen == "faq" -> FAQScreen()
                         currentSubScreen == "contact" -> ContactSupportScreen()
-                        currentSubScreen == "report" -> ReportProblemScreen()
+                        currentSubScreen == "report" -> ReportProblemScreen(onBack = { currentSubScreen = "help" })
+                        currentSubScreen == "about" -> AboutScreen()
                         currentSubScreen == "terms" -> TermsOfServiceScreen()
                         currentSubScreen == "privacy" -> PrivacyPolicyScreen()
                         currentSubScreen == "safety_guidelines" -> SafetyGuidelinesScreen()
@@ -898,7 +1020,12 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                 HomeTab.Discovery -> DiscoveryScreen(
                                     onChatClick = onChatClick,
                                     refreshTrigger = refreshTrigger,
-                                    onRefresh = { refreshTrigger++ }
+                                    onRefresh = { refreshTrigger++ },
+                                    genderFilter = genderFilter,
+                                    preferredCity = preferredCity,
+                                    minAge = ageRangeFilter.start.toInt(),
+                                    maxAge = ageRangeFilter.endInclusive.toInt(),
+                                    onOpenFilters = { currentSubScreen = "filters" }
                                 )
                                 HomeTab.Matches -> MatchesScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
                                 HomeTab.Likes -> LikesScreen(
@@ -907,11 +1034,27 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                                     refreshTrigger = refreshTrigger
                                 )
                                 HomeTab.Message -> ModernChatListScreen(onChatClick = onChatClick, refreshTrigger = refreshTrigger)
-                                HomeTab.Chat -> AstrologyChatView(
-                                    user = currentUserProfile,
-                                    onChatClick = onChatClick,
-                                    modifier = Modifier.fillMaxSize()
-                                )
+                                HomeTab.Chat -> {
+                                    if (currentUserProfile?.isPremiumActive() == true) {
+                                        AstrologyChatView(
+                                            user = currentUserProfile,
+                                            onChatClick = onChatClick,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    } else {
+                                        // Fallback in case they somehow reach here
+                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Gray)
+                                                Spacer(modifier = Modifier.height(16.dp))
+                                                Text("Unlock AI Astrologer with Premium", fontWeight = FontWeight.Bold)
+                                                Button(onClick = { context.startActivity(Intent(context, PremiumActivity::class.java)) }) {
+                                                    Text("Go Premium")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1059,9 +1202,13 @@ fun AstrologyChatView(
     
     var messages by remember { 
         val name = user?.first_name ?: "Seeker"
-        mutableStateOf(listOf<AstrologyMessage>(
+        val initialMessages = mutableListOf<AstrologyMessage>(
             AstrologyMessage.Text("Astrologer", "Welcome, $name. I am your Celestial Guide. 🌙\n\nI see you are in $userCity, where the stars are currently aligned in your favor. Would you like to seek a new connection, or shall we explore the wisdom of the cosmos today?")
-        )) 
+        )
+        if (user?.isPremiumActive() != true) {
+            initialMessages.add(AstrologyMessage.Text("Astrologer", "Note: Advanced features like chatting with your cosmic matches require a Premium subscription. ✨"))
+        }
+        mutableStateOf(initialMessages.toList())
     }
     var inputText by remember { mutableStateOf("") }
     val scrollState = rememberLazyListState()
@@ -1230,7 +1377,7 @@ fun AstrologyChatView(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     shape = CircleShape,
                     color = Color(0xFFFF1493).copy(alpha = 0.1f),
@@ -1260,9 +1407,23 @@ fun AstrologyChatView(
                     )
                 }
             }
-            if (onDismiss != null) {
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (user?.isPremiumActive() != true) {
+                    TextButton(
+                        onClick = { context.startActivity(Intent(context, PremiumActivity::class.java)) },
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = Color(0xFFFF1493), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Upgrade", color = Color(0xFFFF1493), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+
+                if (onDismiss != null) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                    }
                 }
             }
         }
@@ -1556,6 +1717,50 @@ private fun IncomingCallDialog(call: Call, onAccept: () -> Unit, onReject: () ->
         }
     }
 }
+@Composable
+fun RejectedListScreen() {
+    val repository = remember { FirebaseRepository() }
+    val currentUser = remember { FirebaseAuth.getInstance().currentUser }
+    val scope = rememberCoroutineScope()
+    var rejectedUsers by remember { mutableStateOf<List<User>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        currentUser?.let {
+            repository.getDislikedProfiles(it.uid).onSuccess { list -> rejectedUsers = list }
+        }
+        isLoading = false
+    }
+
+    if (isLoading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFFF1493)) }
+    } else if (rejectedUsers.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No rejected users", color = Color.Gray) }
+    } else {
+        LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
+            items(rejectedUsers) { user ->
+                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AsyncImage(
+                        model = if (user.profile_image.isNotEmpty()) user.profile_image else R.drawable.girl,
+                        contentDescription = null, modifier = Modifier.size(50.dp).clip(CircleShape), contentScale = ContentScale.Crop
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(text = "${user.first_name} ${user.last_name}", modifier = Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                currentUser?.let { repository.undislikeProfile(it.uid, user.id).onSuccess { rejectedUsers = rejectedUsers.filter { b -> b.id != user.id } } }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                    ) { Text("Revoke") }
+                }
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.LightGray.copy(0.3f))
+            }
+        }
+    }
+}
+
 @Composable
 fun BlockedListScreen() {
     val repository = remember { FirebaseRepository() }
@@ -2215,7 +2420,7 @@ fun NotificationsScreen(
         if (currentUserProfile?.is_premium != true) {
             NotificationCard(
                 title = "Upgrade to Premium! 💎",
-                description = "See who liked you and get unlimited swipes with our Premium plan.",
+                description = "See who liked you, use AI Astrologer and get unlimited swipes with our Premium plan.",
                 icon = Icons.Default.Diamond,
                 iconColor = Color(0xFFFFD700),
                 backgroundColor = Color(0xFFFFF8E1),
@@ -2518,10 +2723,66 @@ fun MatchOverlay(matchedUser: User, onSendMessage: () -> Unit, onKeepSwiping: ()
     }
 }
 @Composable
+fun DiscoveryHeader(
+    preferredCity: String,
+    minAge: Int,
+    maxAge: Int,
+    gender: String,
+    onOpenFilters: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .background(Color.White, RoundedCornerShape(20.dp))
+            .border(1.dp, Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+            .clickable { onOpenFilters() }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFFF2D6C), modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = if (preferredCity.isEmpty()) "Anywhere" else preferredCity,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+        }
+        
+        VerticalDivider(modifier = Modifier.height(20.dp).width(1.dp), color = Color.LightGray.copy(alpha = 0.5f))
+        
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.CalendarToday, contentDescription = null, tint = Color(0xFFFF2D6C), modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "$minAge - $maxAge",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+        }
+        
+        VerticalDivider(modifier = Modifier.height(20.dp).width(1.dp), color = Color.LightGray.copy(alpha = 0.5f))
+        
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Tune, contentDescription = null, tint = Color(0xFFFF2D6C), modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
 fun DiscoveryScreen(
     onChatClick: (String, String) -> Unit,
     refreshTrigger: Int = 0,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    genderFilter: String = "All",
+    preferredCity: String = "",
+    minAge: Int = 18,
+    maxAge: Int = 100,
+    onOpenFilters: () -> Unit = {}
 ) {
     val repository = remember { FirebaseRepository() }
     val currentUser = remember { FirebaseAuth.getInstance().currentUser }
@@ -2544,7 +2805,11 @@ fun DiscoveryScreen(
             repository.getDiscoveryProfiles(
                 currentUserId = currentUser.uid,
                 limit = 10,
-                lastVisible = lastVisibleDocument
+                lastVisible = lastVisibleDocument,
+                genderFilter = genderFilter,
+                preferredCity = preferredCity,
+                minAge = minAge,
+                maxAge = maxAge
             ).onSuccess { (newProfiles, lastDoc) ->
                 if (newProfiles.isEmpty()) {
                     isEndReached = true
@@ -2587,10 +2852,13 @@ fun DiscoveryScreen(
             if (currentUser != null && currentIndex < profiles.size) {
                 val profile = profiles[currentIndex]
                 repository.likeProfile(currentUser.uid, profile.id)
-                val theyLikedMeSnapshot = repository.getLikedByUsers(currentUser.uid).getOrDefault(emptyList())
-                if (theyLikedMeSnapshot.any { it.id == profile.id }) {
-                    matchedUser = profile
-                } else {
+                repository.checkMatch(currentUser.uid, profile.id).onSuccess { isMatch ->
+                    if (isMatch) {
+                        matchedUser = profile
+                    } else {
+                        onNext()
+                    }
+                }.onFailure {
                     onNext()
                 }
             }
@@ -2607,7 +2875,7 @@ fun DiscoveryScreen(
         }
     }
     
-    LaunchedEffect(refreshTrigger) {
+    LaunchedEffect(refreshTrigger, genderFilter, preferredCity, minAge, maxAge) {
         profiles = emptyList()
         currentIndex = 0
         lastVisibleDocument = null
@@ -2621,6 +2889,14 @@ fun DiscoveryScreen(
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFFF1493)) }
         } else if (currentIndex < profiles.size) {
             Column(modifier = Modifier.fillMaxSize()) {
+                DiscoveryHeader(
+                    preferredCity = preferredCity,
+                    minAge = minAge,
+                    maxAge = maxAge,
+                    gender = genderFilter,
+                    onOpenFilters = onOpenFilters
+                )
+
                 Box(modifier = Modifier.weight(1f).padding(16.dp)) {
                     val swipeProgress = (kotlin.math.abs(offsetX.value) / 500f).coerceIn(0f, 1f)
                     
@@ -2657,10 +2933,10 @@ fun DiscoveryScreen(
                                         scope.launch {
                                             if (offsetX.value > 300) {
                                                 offsetX.animateTo(1000f, spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy))
-                                                onPrevious()
+                                                onLike()
                                             } else if (offsetX.value < -300) {
                                                 offsetX.animateTo(-1000f, spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy))
-                                                onNext()
+                                                onDislike()
                                             } else {
                                                 launch { offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy)) }
                                                 launch { offsetY.animateTo(0f, spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy)) }
@@ -3128,15 +3404,11 @@ fun SettingsScreen(onOptionClick: (String) -> Unit) {
                             "Notifications" -> context.startActivity(Intent(context, NotificationsSettingsActivity::class.java))
                             "Subscription" -> context.startActivity(Intent(context, SubscriptionSettingsActivity::class.java))
                             "Help & Support" -> onOptionClick("help")
-                            "About" -> { /* Handle About or navigate */ }
+                            "About" -> onOptionClick("about")
                         }
                     }
             )
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp), 
-                color = Color(0xFFF3F4F6),
-                thickness = 0.5.dp
-            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF3F4F6), thickness = 0.5.dp)
         }
         
         item {
@@ -3160,8 +3432,52 @@ fun SettingsScreen(onOptionClick: (String) -> Unit) {
         }
     }
 }
+
 @Composable
-fun SafetyCenterScreen() {
+fun AboutScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            modifier = Modifier.size(120.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFFFFEEF5),
+            border = BorderStroke(2.dp, Color(0xFFFF1493).copy(alpha = 0.2f))
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Favorite, null, tint = Color(0xFFFF1493), modifier = Modifier.size(64.dp))
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("HeyDate", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
+        Text("Version 1.0.4 (Build 124)", color = Color.Gray, fontSize = 14.sp)
+        
+        Spacer(modifier = Modifier.height(48.dp))
+        
+        Text(
+            "HeyDate is a modern dating platform designed to foster meaningful connections through shared interests and astrological insights. Our mission is to make dating safer, more intuitive, and fun for everyone.",
+            textAlign = TextAlign.Center,
+            fontSize = 15.sp,
+            color = Color.DarkGray,
+            lineHeight = 24.sp
+        )
+        
+        Spacer(modifier = Modifier.weight(1f))
+        
+        Text("Made with ❤️ for the world", fontSize = 12.sp, color = Color.LightGray)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("© 2024 Dating App Inc. All rights reserved.", fontSize = 11.sp, color = Color.LightGray)
+    }
+}
+
+@Composable
+fun SafetyCenterScreen(onOptionClick: (String) -> Unit) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -3173,15 +3489,18 @@ fun SafetyCenterScreen() {
         
         Spacer(modifier = Modifier.height(24.dp))
         
-        SafetyItem("Safety Tips", Icons.Default.Lightbulb)
-        SafetyItem("Block and Report", Icons.Default.Block)
-        SafetyItem("No One", Icons.Default.PersonOff)
-        SafetyItem("Verify Your Profile", Icons.Default.CheckCircle, isVerified = true)
+        SafetyItem("Safety Tips", Icons.Default.Lightbulb, onClick = { onOptionClick("safety_guidelines") })
+        SafetyItem("Block and Report", Icons.Default.Block, onClick = { onOptionClick("help") })
+        SafetyItem("Report Behavior", Icons.Default.Security, onClick = { onOptionClick("report") })
+        SafetyItem("Verify Profile", Icons.Default.CheckCircle, isVerified = true, onClick = { 
+            Toast.makeText(context, "Verification feature coming soon!", Toast.LENGTH_SHORT).show()
+        })
     }
 }
 @Composable
-fun SafetyItem(title: String, icon: ImageVector, isVerified: Boolean = false) {
+fun SafetyItem(title: String, icon: ImageVector, isVerified: Boolean = false, onClick: () -> Unit = {}) {
     Surface(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
@@ -3204,31 +3523,52 @@ fun SafetyItem(title: String, icon: ImageVector, isVerified: Boolean = false) {
     }
 }
 @Composable
-fun FiltersScreen() {
+fun FiltersScreen(
+    currentGender: String,
+    onGenderChange: (String) -> Unit,
+    currentCity: String,
+    onCityChange: (String) -> Unit,
+    currentAgeRange: ClosedFloatingPointRange<Float>,
+    onAgeRangeChange: (ClosedFloatingPointRange<Float>) -> Unit,
+    onApply: () -> Unit
+) {
     Column(modifier = Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
         Text("Filters", fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(24.dp))
         
-        Text("Location", fontWeight = FontWeight.Bold)
-        Slider(value = 0.5f, onValueChange = {})
+        Text("Location (City)", fontWeight = FontWeight.Bold)
+        OutlinedTextField(
+            value = currentCity,
+            onValueChange = onCityChange,
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Enter city name") },
+            singleLine = true
+        )
         
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Age Range", fontWeight = FontWeight.Bold)
-        RangeSlider(value = 0.2f..0.6f, onValueChange = {})
+        Text("Age Range: ${currentAgeRange.start.toInt()} - ${currentAgeRange.endInclusive.toInt()}", fontWeight = FontWeight.Bold)
+        RangeSlider(
+            value = currentAgeRange,
+            onValueChange = onAgeRangeChange,
+            valueRange = 18f..100f
+        )
         
         Spacer(modifier = Modifier.height(16.dp))
         Text("Gender", fontWeight = FontWeight.Bold)
         Row {
-            FilterChip(selected = true, onClick = {}, label = { Text("All") })
-            Spacer(modifier = Modifier.width(8.dp))
-            FilterChip(selected = false, onClick = {}, label = { Text("Women") })
-            Spacer(modifier = Modifier.width(8.dp))
-            FilterChip(selected = false, onClick = {}, label = { Text("Men") })
+            listOf("All", "Female", "Male").forEach { gender ->
+                FilterChip(
+                    selected = currentGender == gender,
+                    onClick = { onGenderChange(gender) },
+                    label = { Text(gender) }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
         }
 
         Spacer(modifier = Modifier.weight(1f))
         Button(
-            onClick = { },
+            onClick = onApply,
             modifier = Modifier.fillMaxWidth().height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF2D6C))
         ) {
@@ -3652,6 +3992,7 @@ fun FAQScreen() {
 
 @Composable
 fun ContactSupportScreen() {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -3682,14 +4023,53 @@ fun ContactSupportScreen() {
         Text("Support Channels", fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
 
-        SupportChannelItem(icon = Icons.Default.Email, title = "Email Support", value = "support@datingapp.com", bgColor = Color(0xFFE8F5E9), iconColor = Color(0xFF4CAF50))
-        SupportChannelItem(icon = Icons.Default.Phone, title = "Hotline", value = "+1 (800) 123-4567", bgColor = Color(0xFFE3F2FD), iconColor = Color(0xFF2196F3))
-        SupportChannelItem(icon = Icons.Default.Chat, title = "Live Chat", value = "Typical response: 5 mins", bgColor = Color(0xFFFFF3E0), iconColor = Color(0xFFFF9800))
+        SupportChannelItem(
+            icon = Icons.Default.Email, 
+            title = "Email Support", 
+            value = "support@datingapp.com", 
+            bgColor = Color(0xFFE8F5E9), 
+            iconColor = Color(0xFF4CAF50),
+            onClick = {
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = android.net.Uri.parse("mailto:support@datingapp.com")
+                    putExtra(Intent.EXTRA_SUBJECT, "Support Request")
+                }
+                context.startActivity(Intent.createChooser(intent, "Send Email"))
+            }
+        )
+        SupportChannelItem(
+            icon = Icons.Default.Phone, 
+            title = "Hotline", 
+            value = "+1 (800) 123-4567", 
+            bgColor = Color(0xFFE3F2FD), 
+            iconColor = Color(0xFF2196F3),
+            onClick = {
+                val intent = Intent(Intent.ACTION_DIAL).apply {
+                    data = android.net.Uri.parse("tel:+18001234567")
+                }
+                context.startActivity(intent)
+            }
+        )
+        SupportChannelItem(
+            icon = Icons.Default.Chat, 
+            title = "Live Chat", 
+            value = "Typical response: 5 mins", 
+            bgColor = Color(0xFFFFF3E0), 
+            iconColor = Color(0xFFFF9800),
+            onClick = {
+                Toast.makeText(context, "Live Chat is currently offline. Please use email.", Toast.LENGTH_LONG).show()
+            }
+        )
 
         Spacer(modifier = Modifier.weight(1f))
         
         Button(
-            onClick = { },
+            onClick = { 
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = android.net.Uri.parse("mailto:support@datingapp.com")
+                }
+                context.startActivity(Intent.createChooser(intent, "Contact Us"))
+            },
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1493))
@@ -3700,8 +4080,9 @@ fun ContactSupportScreen() {
 }
 
 @Composable
-fun SupportChannelItem(icon: ImageVector, title: String, value: String, bgColor: Color, iconColor: Color) {
+fun SupportChannelItem(icon: ImageVector, title: String, value: String, bgColor: Color, iconColor: Color, onClick: () -> Unit = {}) {
     Surface(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
         color = Color(0xFFF9FAFB),
@@ -3725,8 +4106,12 @@ fun SupportChannelItem(icon: ImageVector, title: String, value: String, bgColor:
 }
 
 @Composable
-fun ReportProblemScreen() {
+fun ReportProblemScreen(onBack: () -> Unit) {
     var problemText by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isSubmitting by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
         Text("Report a Problem", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         Text("Spotted a bug? Help us improve your experience by describing it below.", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
@@ -3753,7 +4138,9 @@ fun ReportProblemScreen() {
         Surface(
             color = Color(0xFFF1F1F1),
             shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth().clickable { }
+            modifier = Modifier.fillMaxWidth().clickable { 
+                Toast.makeText(context, "Image picker coming soon", Toast.LENGTH_SHORT).show()
+            }
         ) {
             Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.AddPhotoAlternate, null, tint = Color.Gray)
@@ -3765,13 +4152,21 @@ fun ReportProblemScreen() {
         Spacer(modifier = Modifier.weight(1f))
         
         Button(
-            onClick = { },
+            onClick = { 
+                isSubmitting = true
+                scope.launch {
+                    delay(1500)
+                    Toast.makeText(context, "Report submitted successfully. Thank you!", Toast.LENGTH_LONG).show()
+                    onBack()
+                }
+            },
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1493)),
-            enabled = problemText.isNotBlank()
+            enabled = problemText.isNotBlank() && !isSubmitting
         ) {
-            Text("Submit Report", fontWeight = FontWeight.Bold)
+            if (isSubmitting) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+            else Text("Submit Report", fontWeight = FontWeight.Bold)
         }
     }
 }

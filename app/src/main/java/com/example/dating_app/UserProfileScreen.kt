@@ -119,6 +119,7 @@ fun UserProfileScreen(
                         "country" to updatedUser.country,
                         "state" to updatedUser.state,
                         "city" to updatedUser.city,
+                        "city_lowercase" to updatedUser.city.lowercase().trim(),
                         "profile_image" to updatedUser.profile_image,
                         "updated_at" to System.currentTimeMillis()
                     )

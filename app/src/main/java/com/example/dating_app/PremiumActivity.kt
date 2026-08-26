@@ -230,6 +230,7 @@ fun PremiumScreen(onClose: () -> Unit) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp)) {
                     BenefitItem("Unlimited Likes", "Like as many people as you want", Icons.Default.Favorite)
                     BenefitItem("See who likes you", "See everyone who likes you", Icons.Default.Visibility)
+                    BenefitItem("AI Astrologer", "Get cosmic insights & match suggestions", Icons.Default.AutoAwesome)
                     BenefitItem("Boost your profile", "Get more visibility & more matches", Icons.Default.RocketLaunch)
                     BenefitItem("No ads", "Enjoy ad-free experience", Icons.Default.Block)
                 }

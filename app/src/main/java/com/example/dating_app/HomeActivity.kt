@@ -362,6 +362,15 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                     Lifecycle.Event.ON_STOP -> repository.updateProfile(uid, mapOf("is_online" to false, "last_seen" to System.currentTimeMillis()))
                     Lifecycle.Event.ON_RESUME -> {
                         refreshTrigger++ // Refresh data when returning to home
+                        // Force refresh user profile to ensure premium status is synced
+                        scope.launch {
+                            auth.currentUser?.uid?.let { uid ->
+                                repository.syncPremiumStatus(uid)
+                                repository.getUser(uid).onSuccess { user ->
+                                    if (user != null) currentUserProfile = user
+                                }
+                            }
+                        }
                     }
                     else -> {}
                 }
@@ -819,12 +828,13 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
             },
             bottomBar = {
                 if (currentSubScreen == null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 6.dp, start = 12.dp, end = 12.dp),
-                        contentAlignment = Alignment.BottomCenter
-                    ) {
+                    key(currentUserProfile?.is_premium, currentUserProfile?.premium_expiry) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp, start = 12.dp, end = 12.dp),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -967,7 +977,8 @@ fun HomeScreen(onChatClick: (String, String) -> Unit) {
                     }
                 }
             }
-        ) { padding ->
+        }
+    ) { padding ->
             val contentPadding = if (currentSubScreen == "profile") {
                 PaddingValues(bottom = padding.calculateBottomPadding())
             } else {
@@ -1200,7 +1211,7 @@ fun AstrologyChatView(
     val goalOptions = listOf("Serious Relationship", "Casual Dating", "Friendship", "Marriage")
     val interestOptions = listOf("Travel", "Music", "Movies", "Sports", "Food", "Reading", "Fitness", "Art", "Dancing", "Photography")
     
-    var messages by remember { 
+    var messages by remember(user?.id, user?.is_premium) { 
         val name = user?.first_name ?: "Seeker"
         val initialMessages = mutableListOf<AstrologyMessage>(
             AstrologyMessage.Text("Astrologer", "Welcome, $name. I am your Celestial Guide. 🌙\n\nI see you are in $userCity, where the stars are currently aligned in your favor. Would you like to seek a new connection, or shall we explore the wisdom of the cosmos today?")
@@ -1341,6 +1352,13 @@ fun AstrologyChatView(
 
     val context = LocalContext.current
     var showPremiumDialog by remember { mutableStateOf(false) }
+
+    // Auto-dismiss dialog if user becomes premium
+    LaunchedEffect(user?.is_premium, user?.premium_expiry) {
+        if (user?.isPremiumActive() == true) {
+            showPremiumDialog = false
+        }
+    }
 
     if (showPremiumDialog) {
         AlertDialog(
